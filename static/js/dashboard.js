@@ -262,8 +262,21 @@ class Dashboard {
         card.className = 'cluster-card';
         card.innerHTML = `
             <div class="cluster-card-header">
-                <span class="cluster-name">${c.name}</span>
-                <span class="cluster-vc">${c.vcenter_name}</span>
+                <div>
+                    <span class="cluster-name">${c.name}</span>
+                    <span class="cluster-vc">${c.vcenter_name}</span>
+                </div>
+                <div class="status-dot ${c.status === 'red' ? 'red' : (c.status === 'yellow' ? 'yellow' : 'green')}"></div>
+            </div>
+            <div class="cluster-mini-stats">
+                <div class="mini-stat">
+                    <span class="val">${c.total_hosts}</span>
+                    <span class="lbl">Hôtes</span>
+                </div>
+                <div class="mini-stat">
+                    <span class="val">${c.total_vms}</span>
+                    <span class="lbl">VMs</span>
+                </div>
             </div>
             <div class="resource-row">
                 <div class="resource-label"><span>CPU</span><span>${c.cpu_usage_pct}%</span></div>

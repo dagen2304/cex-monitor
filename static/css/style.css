@@ -437,9 +437,41 @@ body {
     font-weight: 600;
 }
 
-.cluster-vc {
-    font-size: 0.75rem;
-    color: var(--primary);
+.cluster-vc { 
+    display: block; 
+    font-size: 0.75rem; 
+    color: var(--primary); 
+    font-weight: 500;
+}
+
+.cluster-mini-stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.mini-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.mini-stat .val {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.mini-stat .lbl {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
 }
 
 .resource-row {
