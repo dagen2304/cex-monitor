@@ -46,8 +46,13 @@ class Dashboard {
         });
 
         // Event Listeners for Search
+        document.getElementById('search-vcenters').addEventListener('input', (e) => this.filterVCenters(e.target.value));
         document.getElementById('search-clusters').addEventListener('input', (e) => this.filterTable('clusters-detailed-body', e.target.value));
         document.getElementById('search-datastores').addEventListener('input', (e) => this.filterTable('datastores-body', e.target.value));
+        
+        // Modal search
+        document.getElementById('search-modal-hosts').addEventListener('input', (e) => this.filterTable('modal-hosts-body', e.target.value));
+        document.getElementById('search-modal-vms').addEventListener('input', (e) => this.filterTable('modal-vms-body', e.target.value));
         
         // Manual Refresh
         this.refreshBtn.addEventListener('click', () => {
@@ -331,10 +336,11 @@ class Dashboard {
         const grid = document.getElementById('vcenters-grid');
         if (grid.querySelector('.empty-state')) grid.innerHTML = '';
         
-        let card = document.getElementById(`vc-${vc.vcenter.replace(/\s+/g, '-')}`);
+        const cardId = `vc-${vc.vcenter.replace(/\s+/g, '-')}`;
+        let card = document.getElementById(cardId);
         if (!card) {
             card = document.createElement('div');
-            card.id = `vc-${vc.vcenter.replace(/\s+/g, '-')}`;
+            card.id = cardId;
             card.className = 'vc-card';
             grid.appendChild(card);
         }
@@ -347,23 +353,52 @@ class Dashboard {
         const vmOff = vc.vms ? vc.vms.off : 0;
 
         card.innerHTML = `
+            <div class="vc-card-glow"></div>
             <div class="vc-card-header">
-                <span class="vc-name">${vc.vcenter}</span>
-                <div class="status-dot ${vc.state === 'UP' ? 'green' : 'red'}"></div>
+                <div class="vc-title-group">
+                    <span class="vc-name">${vc.vcenter}</span>
+                    <span class="vc-ip">${vc.ip}</span>
+                </div>
+                <div class="status-indicator">
+                    <span class="status-text ${vc.state === 'UP' ? 'green' : 'red'}">${vc.state}</span>
+                    <div class="pulse-dot ${vc.state === 'UP' ? 'green' : 'red'}"></div>
+                </div>
             </div>
             <div class="vc-stats-grid">
                 <div class="vc-stat-item">
-                    <span class="vc-stat-val">${hostActive} / ${hostMaint}</span>
-                    <span class="vc-stat-lbl">Hôtes (Actifs/Maint)</span>
+                    <div class="vc-stat-main">
+                        <span class="vc-stat-val">${hostActive}</span>
+                        <span class="vc-stat-sep">/</span>
+                        <span class="vc-stat-sub ${hostMaint > 0 ? 'text-warning' : ''}">${hostMaint}</span>
+                    </div>
+                    <span class="vc-stat-lbl">Hôtes ESXi</span>
                 </div>
                 <div class="vc-stat-item">
-                    <span class="vc-stat-val">${vmOn} / ${vmOff}</span>
-                    <span class="vc-stat-lbl">VMs (On/Off)</span>
+                    <div class="vc-stat-main">
+                        <span class="vc-stat-val">${vmOn}</span>
+                        <span class="vc-stat-sep">/</span>
+                        <span class="vc-stat-sub text-muted">${vmOff}</span>
+                    </div>
+                    <span class="vc-stat-lbl">Machines Virtuelles</span>
                 </div>
+            </div>
+            <div class="vc-card-footer">
+                <span class="vc-action">Cliquer pour les détails</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
             </div>
         `;
 
         card.onclick = () => this.openModal(vc);
+    }
+
+    filterVCenters(query) {
+        const cards = document.querySelectorAll('.vc-card');
+        const q = query.toLowerCase();
+        cards.forEach(card => {
+            card.style.display = card.innerText.toLowerCase().includes(q) ? '' : 'none';
+        });
     }
 
     openModal(vc) {
@@ -502,12 +537,49 @@ class Dashboard {
         rows.forEach(row => tbody.appendChild(row));
     }
 
+    exportModalData(tab, format) {
+        const vcName = document.getElementById('modal-title').textContent;
+        const filename = `NOC_vCenter_${vcName}_${tab}_${new Date().toISOString().slice(0,10)}`;
+        let dataToExport = [];
+        
+        if (tab === 'hosts') {
+            dataToExport.push(['Hôte', 'Cluster', 'CPU', 'VMs', 'Status']);
+            const rows = document.querySelectorAll('#modal-hosts-body tr');
+            rows.forEach(row => {
+                if (row.style.display !== 'none') {
+                    dataToExport.push(Array.from(row.cells).map(cell => cell.innerText));
+                }
+            });
+        } else if (tab === 'vms') {
+            dataToExport.push(['Nom', 'État']);
+            const rows = document.querySelectorAll('#modal-vms-body tr');
+            rows.forEach(row => {
+                if (row.style.display !== 'none') {
+                    dataToExport.push(Array.from(row.cells).map(cell => cell.innerText));
+                }
+            });
+        }
+
+        if (format === 'csv') {
+            const csvContent = dataToExport.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', `${filename}.csv`);
+            link.click();
+        } else if (format === 'xls') {
+            const ws = XLSX.utils.aoa_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+            XLSX.writeFile(wb, `${filename}.xlsx`);
+        }
+    }
+
     async exportData(type, format) {
-        const targetId = type === 'clusters-detailed' ? 'table-clusters-detailed' : 'datastores-body';
         const filename = `NOC_Export_${type}_${new Date().toISOString().slice(0,10)}`;
 
         if (format === 'png') {
-            const element = document.getElementById(type === 'clusters-detailed' ? 'container-clusters-detailed' : 'view-vmware');
+            const element = type === 'vcenters' ? document.getElementById('vcenters-grid') : (type === 'clusters-detailed' ? document.getElementById('container-clusters-detailed') : document.getElementById('view-vmware'));
             this.showNotification('Génération de la capture...');
             const canvas = await html2canvas(element, { backgroundColor: '#050508' });
             const link = document.createElement('a');
@@ -517,22 +589,36 @@ class Dashboard {
             return;
         }
 
-        const table = document.getElementById(type === 'clusters-detailed' ? 'table-clusters-detailed' : '');
-        // For datastores, we might need to recreate a table header if we export from tbody
         let dataToExport = [];
-        if (type === 'clusters-detailed') {
+        if (type === 'vcenters') {
+            dataToExport.push(['vCenter', 'IP', 'État', 'Hôtes Actifs', 'Hôtes Maint', 'VMs ON', 'VMs OFF']);
+            const cards = document.querySelectorAll('.vc-card');
+            cards.forEach(card => {
+                if (card.style.display !== 'none') {
+                    const name = card.querySelector('.vc-name').innerText;
+                    const ip = card.querySelector('.vc-ip').innerText;
+                    const state = card.querySelector('.status-text').innerText;
+                    const stats = card.querySelectorAll('.vc-stat-val, .vc-stat-sub');
+                    dataToExport.push([name, ip, state, stats[0].innerText, stats[1].innerText, stats[2].innerText, stats[3].innerText]);
+                }
+            });
+        } else if (type === 'clusters-detailed') {
+            const table = document.getElementById('table-clusters-detailed');
             const rows = table.querySelectorAll('tr');
             rows.forEach(row => {
-                const rowData = Array.from(row.cells).map(cell => cell.innerText);
-                dataToExport.push(rowData);
+                if (row.style.display !== 'none') {
+                    const rowData = Array.from(row.cells).map(cell => cell.innerText);
+                    dataToExport.push(rowData);
+                }
             });
         } else {
-            // Datastores table
-            const header = ['Nom', 'vCenter', 'Capacité', 'Utilisation', 'Libre', 'Status'];
-            dataToExport.push(header);
+            // Datastores
+            dataToExport.push(['Nom', 'vCenter', 'Capacité', 'Utilisation', 'Libre', 'Status']);
             const rows = document.querySelectorAll('#datastores-body tr');
             rows.forEach(row => {
-                dataToExport.push(Array.from(row.cells).map(cell => cell.innerText));
+                if (row.style.display !== 'none') {
+                    dataToExport.push(Array.from(row.cells).map(cell => cell.innerText));
+                }
             });
         }
 

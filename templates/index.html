@@ -134,8 +134,17 @@
                     
                     <section class="data-panel">
                         <div class="panel-header">
-                            <h3>vCenters</h3>
-                            <span class="badge" id="badge-vcenters">0 vCenters</span>
+                            <div class="header-left">
+                                <h3>vCenters</h3>
+                                <span class="badge" id="badge-vcenters">0 vCenters</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-vcenters" placeholder="Filtrer les vCenters...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('vcenters', 'csv')">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('vcenters', 'png')">PNG</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="vcenters-grid" id="vcenters-grid">
                             <div class="empty-state">Collecte des vCenters...</div>
@@ -249,20 +258,42 @@
                     <button class="modal-tab" data-tab="alerts">Alertes (<span id="modal-alert-count">0</span>)</button>
                 </div>
                 <div class="tab-content active" id="tab-hosts">
+                    <div class="modal-controls">
+                        <input type="text" class="search-input" id="search-modal-hosts" placeholder="Filtrer les hôtes...">
+                        <div class="export-group">
+                            <button class="btn-export" onclick="dashboard.exportModalData('hosts', 'csv')">CSV</button>
+                            <button class="btn-export" onclick="dashboard.exportModalData('hosts', 'xls')">XLS</button>
+                        </div>
+                    </div>
                     <div class="table-container">
-                        <table class="premium-table">
+                        <table class="premium-table sortable" id="table-modal-hosts">
                             <thead>
-                                <tr><th>Hôte</th><th>Cluster</th><th>CPU</th><th>VMs</th><th>Status</th></tr>
+                                <tr>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 0)">Hôte</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 1)">Cluster</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 2)">CPU</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 3)">VMs</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 4)">Status</th>
+                                </tr>
                             </thead>
                             <tbody id="modal-hosts-body"></tbody>
                         </table>
                     </div>
                 </div>
                 <div class="tab-content" id="tab-vms">
+                    <div class="modal-controls">
+                        <input type="text" class="search-input" id="search-modal-vms" placeholder="Filtrer les VMs...">
+                        <div class="export-group">
+                            <button class="btn-export" onclick="dashboard.exportModalData('vms', 'csv')">CSV</button>
+                        </div>
+                    </div>
                     <div class="table-container">
-                        <table class="premium-table">
+                        <table class="premium-table sortable" id="table-modal-vms">
                             <thead>
-                                <tr><th>Nom</th><th>État</th></tr>
+                                <tr>
+                                    <th onclick="dashboard.sortTable('table-modal-vms', 0)">Nom</th>
+                                    <th onclick="dashboard.sortTable('table-modal-vms', 1)">État</th>
+                                </tr>
                             </thead>
                             <tbody id="modal-vms-body"></tbody>
                         </table>
