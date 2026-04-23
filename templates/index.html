@@ -154,8 +154,53 @@
 
                     <section class="data-panel">
                         <div class="panel-header">
-                            <h3>Vue Datastores</h3>
-                            <span class="badge" id="badge-datastores">0 datastores</span>
+                            <div class="header-left">
+                                <h3>Inventaire Détaillé des Clusters</h3>
+                                <span class="badge" id="badge-clusters-detailed">0 clusters</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-clusters" placeholder="Rechercher un cluster...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('clusters-detailed', 'csv')" title="Exporter en CSV">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('clusters-detailed', 'xls')" title="Exporter en Excel">XLS</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('clusters-detailed', 'png')" title="Capture PNG">PNG</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-container" id="container-clusters-detailed">
+                            <table class="premium-table sortable" id="table-clusters-detailed">
+                                <thead>
+                                    <tr>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 0)">vCenter</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 1)">Cluster</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 2)">Hôtes (Total/Maint)</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 3)">Nombre de VMs</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 4)">DRS</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 5)">Usage Stockage</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 6)">Alarmes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clusters-detailed-body">
+                                    <tr><td colspan="7" class="text-center">En attente de données...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Vue Datastores</h3>
+                                <span class="badge" id="badge-datastores">0 datastores</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-datastores" placeholder="Rechercher un datastore...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('datastores', 'csv')">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('datastores', 'xls')">XLS</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('datastores', 'png')">PNG</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="table-container">
                             <table class="premium-table">
@@ -233,6 +278,9 @@
     </div>
     <div id="toast-container"></div>
 
+    <!-- Libraries for Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

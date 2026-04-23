@@ -45,6 +45,10 @@ class Dashboard {
             });
         });
 
+        // Event Listeners for Search
+        document.getElementById('search-clusters').addEventListener('input', (e) => this.filterTable('clusters-detailed-body', e.target.value));
+        document.getElementById('search-datastores').addEventListener('input', (e) => this.filterTable('datastores-body', e.target.value));
+        
         // Manual Refresh
         this.refreshBtn.addEventListener('click', () => {
             this.refreshAll();
@@ -170,8 +174,12 @@ class Dashboard {
 
             // Handle Clusters
             if (data.clusters) {
-                data.clusters.forEach(c => this.renderCluster(c));
+                data.clusters.forEach(c => {
+                    this.renderCluster(c);
+                    this.renderDetailedCluster(c, data.vcenter);
+                });
                 this.updateBadge('badge-clusters', document.querySelectorAll('.cluster-card').length + ' clusters');
+                this.updateBadge('badge-clusters-detailed', document.querySelectorAll('#clusters-detailed-body tr').length + ' clusters');
             }
 
             // Handle Datastores
@@ -417,12 +425,128 @@ class Dashboard {
         document.getElementById(`tab-${tabId}`).classList.add('active');
     }
 
+    renderDetailedCluster(c, vcenterName) {
+        const body = document.getElementById('clusters-detailed-body');
+        if (body.querySelector('.text-center')) body.innerHTML = '';
+        
+        const rowId = `row-cluster-${vcenterName}-${c.name}`.replace(/\s+/g, '-');
+        let row = document.getElementById(rowId);
+        if (!row) {
+            row = document.createElement('tr');
+            row.id = rowId;
+            body.appendChild(row);
+        }
+
+        const hostsTotal = c.total_hosts || 0;
+        const hostsMaint = c.maint_hosts || 0;
+        const totalVMs = c.total_vms || 0;
+        const storageUsage = c.storage_usage_pct || 0;
+        const drsStatus = c.drs_enabled ? '<span class="badge green">ON</span>' : '<span class="badge">OFF</span>';
+        
+        row.innerHTML = `
+            <td><span class="vc-tag">${vcenterName}</span></td>
+            <td><strong>${c.name}</strong></td>
+            <td>${hostsTotal} / <span class="${hostsMaint > 0 ? 'text-warning' : ''}">${hostsMaint}</span></td>
+            <td>${totalVMs}</td>
+            <td>${drsStatus}</td>
+            <td>
+                <div class="progress-track" style="width: 80px; display: inline-block; vertical-align: middle; margin-right: 8px;">
+                    <div class="progress-fill ${storageUsage > 90 ? 'bg-danger' : 'fill-cpu'}" style="width: ${storageUsage}%"></div>
+                </div>
+                <span class="text-xs">${storageUsage}%</span>
+            </td>
+            <td>
+                <span class="badge ${c.status === 'red' ? 'danger' : (c.status === 'yellow' ? 'warning' : 'success')}">
+                    ${c.status === 'red' ? 'CRITIQUE' : (c.status === 'yellow' ? 'ATTENTION' : 'OK')}
+                </span>
+            </td>
+        `;
+    }
+
+    filterTable(bodyId, query) {
+        const rows = document.querySelectorAll(`#${bodyId} tr`);
+        const q = query.toLowerCase();
+        rows.forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
+        });
+    }
+
+    sortTable(tableId, colIndex) {
+        const table = document.getElementById(tableId);
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const isAsc = table.dataset.sortCol === colIndex.toString() && table.dataset.sortOrder === 'asc';
+        
+        rows.sort((a, b) => {
+            const aVal = a.cells[colIndex].innerText.toLowerCase();
+            const bVal = b.cells[colIndex].innerText.toLowerCase();
+            return isAsc ? bVal.localeCompare(aVal, undefined, {numeric: true}) : aVal.localeCompare(bVal, undefined, {numeric: true});
+        });
+        
+        table.dataset.sortOrder = isAsc ? 'desc' : 'asc';
+        table.dataset.sortCol = colIndex;
+        
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    async exportData(type, format) {
+        const targetId = type === 'clusters-detailed' ? 'table-clusters-detailed' : 'datastores-body';
+        const filename = `NOC_Export_${type}_${new Date().toISOString().slice(0,10)}`;
+
+        if (format === 'png') {
+            const element = document.getElementById(type === 'clusters-detailed' ? 'container-clusters-detailed' : 'view-vmware');
+            this.showNotification('Génération de la capture...');
+            const canvas = await html2canvas(element, { backgroundColor: '#050508' });
+            const link = document.createElement('a');
+            link.download = `${filename}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+            return;
+        }
+
+        const table = document.getElementById(type === 'clusters-detailed' ? 'table-clusters-detailed' : '');
+        // For datastores, we might need to recreate a table header if we export from tbody
+        let dataToExport = [];
+        if (type === 'clusters-detailed') {
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+                const rowData = Array.from(row.cells).map(cell => cell.innerText);
+                dataToExport.push(rowData);
+            });
+        } else {
+            // Datastores table
+            const header = ['Nom', 'vCenter', 'Capacité', 'Utilisation', 'Libre', 'Status'];
+            dataToExport.push(header);
+            const rows = document.querySelectorAll('#datastores-body tr');
+            rows.forEach(row => {
+                dataToExport.push(Array.from(row.cells).map(cell => cell.innerText));
+            });
+        }
+
+        if (format === 'csv') {
+            const csvContent = dataToExport.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', `${filename}.csv`);
+            link.click();
+        } else if (format === 'xls') {
+            const ws = XLSX.utils.aoa_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+            XLSX.writeFile(wb, `${filename}.xlsx`);
+        }
+    }
+
     showNotification(msg, type = 'info') {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = msg;
-        document.getElementById('toast-container').appendChild(toast);
-        setTimeout(() => toast.remove(), 5000);
+        const container = document.getElementById('toast-container');
+        if (container) {
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
     }
 }
 

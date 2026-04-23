@@ -315,12 +315,87 @@ body {
 }
 
 .panel-header {
-    padding: 20px 24px;
+    padding: 20px 32px;
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: rgba(255, 255, 255, 0.02);
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.search-input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #fff;
+    font-size: 0.85rem;
+    width: 250px;
+    transition: var(--transition);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 10px var(--primary-glow);
+    width: 300px;
+}
+
+.export-group {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-export {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-export:hover {
+    background: var(--primary);
+    color: #000;
+    border-color: var(--primary);
+    box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.premium-table.sortable th {
+    cursor: pointer;
+    user-select: none;
+}
+
+.premium-table.sortable th:hover {
+    color: var(--primary);
+    background: rgba(0, 242, 255, 0.05);
+}
+
+.premium-table.sortable th::after {
+    content: '↕';
+    margin-left: 8px;
+    font-size: 0.8rem;
+    opacity: 0.3;
 }
 
 .panel-header h3 {
@@ -736,7 +811,18 @@ body {
     border-radius: 4px;
 }
 
-.alert-item.WARNING {
-    background: rgba(245, 158, 11, 0.1);
-    border-left-color: var(--warning);
+.alert-item.WARNING { background: rgba(245, 158, 11, 0.1); border-left-color: var(--warning); }
+
+.vc-tag {
+    background: rgba(112, 0, 255, 0.15);
+    color: #a78bfa;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid rgba(112, 0, 255, 0.3);
 }
+
+.bg-danger { background: var(--danger) !important; box-shadow: 0 0 10px var(--danger); }
+.text-warning { color: var(--warning); }
+.text-xs { font-size: 0.7rem; }
