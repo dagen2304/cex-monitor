@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOC INFRA | Unified Dashboard</title>
+    <meta name="description" content="Supervision en temps réel de l'infrastructure VMware et du stockage SAN/NAS.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="glow-overlay"></div>
+    
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h1>NOC INFRA</h1>
+            </div>
+            
+            <nav class="nav-menu">
+                <div class="nav-group">
+                    <span class="group-title">Hyperviseur</span>
+                    <button class="nav-link active" data-view="vmware" id="btn-vmware">
+                        <span class="icon">●</span> VMware vSphere
+                    </button>
+                </div>
+                
+                <div class="nav-group">
+                    <span class="group-title">Stockage</span>
+                    <button class="nav-link" data-view="storage" id="btn-storage">
+                        <span class="icon">●</span> Baies de Stockage
+                    </button>
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <div class="pulse-dot green"></div>
+                    <span>Service: Operationnel</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-info">
+                    <h2 id="current-view-title">VMware vSphere</h2>
+                    <p id="current-view-subtitle">Supervision Multi-vCenter</p>
+                </div>
+                
+                <div class="live-clock">
+                    <span id="clock-date">--/--/----</span>
+                    <span id="clock-time">--:--:--</span>
+                </div>
+                
+                <div class="actions">
+                    <button class="btn-primary" id="refresh-trigger">
+                        <svg class="refresh-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Rafraîchir</span>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-scroll">
+                <!-- VMware View -->
+                <div id="view-vmware" class="view-pane active">
+                    <section class="stats-grid">
+                        <div class="stat-card" id="card-total-vms">
+                            <div class="stat-icon blue">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                                    <line x1="6" y1="6" x2="6.01" y2="6"/>
+                                    <line x1="6" y1="18" x2="6.01" y2="18"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Total VMs</span>
+                                <h3 class="value" id="count-total">--</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 3l14 9-14 9V3z"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Actives</span>
+                                <h3 class="value green" id="count-on">--</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon red">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="6" y="4" width="4" height="16"/>
+                                    <rect x="14" y="4" width="4" height="16"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Éteintes</span>
+                                <h3 class="value red" id="count-off">--</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon yellow">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="10" y1="15" x2="10" y2="9"/>
+                                    <line x1="14" y1="15" x2="14" y2="9"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Suspendues</span>
+                                <h3 class="value yellow" id="count-suspend">--</h3>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <h3>Santé des Clusters</h3>
+                            <span class="badge" id="badge-clusters">0 clusters</span>
+                        </div>
+                        <div class="clusters-container" id="clusters-grid">
+                            <div class="empty-state">Chargement des données...</div>
+                        </div>
+                    </section>
+
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <h3>Vue Datastores</h3>
+                            <span class="badge" id="badge-datastores">0 datastores</span>
+                        </div>
+                        <div class="table-container">
+                            <table class="premium-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nom</th>
+                                        <th>vCenter</th>
+                                        <th>Capacité</th>
+                                        <th>Utilisation</th>
+                                        <th>Libre</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="datastores-body">
+                                    <tr><td colspan="6" class="text-center">Initialisation...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Storage View -->
+                <div id="view-storage" class="view-pane">
+                    <div id="storage-container" class="storage-grid">
+                        <div class="empty-state">Démarrage de la collecte storage...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals / Overlays -->
+    <div id="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

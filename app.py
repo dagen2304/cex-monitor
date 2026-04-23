@@ -1,0 +1,203 @@
+from flask import Flask, render_template, jsonify, Response, stream_with_context
+import os
+import json
+import concurrent.futures
+from dotenv import load_dotenv
+from vmware_health import fetch_vmware_stats
+from storage_health import fetch_all_storage_stats
+import logging
+
+# Configuration du logging
+logging.basicConfig(
+    filename='vCenter.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+load_dotenv()
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/vmware/stream')
+def api_vmware_stream():
+    user = os.getenv("VC_USER")
+    pwd = os.getenv("VC_PASSWORD")
+
+    # Récupération dynamique des vCenters configurés
+    vcenters = [
+        {"name": os.getenv("VC1_NAME", "vCenter 1"), "ip": os.getenv("VC1_IP")},
+        {"name": os.getenv("VC2_NAME", "vCenter 2"), "ip": os.getenv("VC2_IP")},
+        {"name": os.getenv("VC3_NAME", "vCenter 3"), "ip": os.getenv("VC3_IP")},
+        {"name": os.getenv("VC4_NAME", "vCenter 4"), "ip": os.getenv("VC4_IP")},
+        {"name": os.getenv("VC5_NAME", "vCenter 5"), "ip": os.getenv("VC5_IP")},
+        {"name": os.getenv("VC6_NAME", "vCenter 6"), "ip": os.getenv("VC6_IP")},
+        {"name": os.getenv("VC7_NAME", "vCenter 7"), "ip": os.getenv("VC7_IP")},
+    ]
+
+    def fetch_vc(vc):
+        if not vc.get("ip"): return None
+        
+        logging.info(f"Tentative de connexion au vCenter {vc['name']} ({vc['ip']})")
+        vc_data = fetch_vmware_stats(vc["ip"], user, pwd)
+        
+        result = {"vcenter": vc["name"], "ip": vc["ip"]}
+        if vc_data.get("status") == "error":
+            logging.error(f"Échec de la connexion au vCenter {vc['name']} ({vc['ip']}): {vc_data.get('error_msg')}")
+            result["state"] = "DOWN"
+            result["error"] = vc_data.get("error_msg")
+        else:
+            logging.info(f"Connexion réussie au vCenter {vc['name']} ({vc['ip']})")
+            result["state"] = "UP"
+            result["vms"] = vc_data["vms"]
+            result["host_list"] = vc_data.get("host_list", [])
+            result["vm_list"] = vc_data.get("vm_list", [])
+            
+            result["clusters"] = []
+            for cluster in vc_data.get("clusters", []):
+                cluster["vcenter_name"] = vc["name"]
+                result["clusters"].append(cluster)
+                
+            result["datastores"] = []
+            for ds in vc_data.get("datastores", []):
+                ds["vcenter_name"] = vc["name"]
+                result["datastores"].append(ds)
+                
+        return result
+
+    def generate():
+        valid_vcenters = [vc for vc in vcenters if vc.get("ip")]
+        if not valid_vcenters:
+            yield f"event: end\ndata: {{}}\n\n"
+            return
+            
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(valid_vcenters)) as executor:
+            future_to_vc = {executor.submit(fetch_vc, vc): vc for vc in valid_vcenters}
+            for future in concurrent.futures.as_completed(future_to_vc):
+                try:
+                    result = future.result()
+                    if result:
+                        yield f"data: {json.dumps(result)}\n\n"
+                except Exception as exc:
+                    vc = future_to_vc[future]
+                    logging.error(f"Erreur d'exécution pour {vc['name']}: {exc}")
+                    err_result = {"vcenter": vc["name"], "ip": vc["ip"], "state": "DOWN", "error": str(exc)}
+                    yield f"data: {json.dumps(err_result)}\n\n"
+                    
+        yield f"event: end\ndata: {{}}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/storage/stream')
+def api_storage_stream():
+    @stream_with_context
+    def generate():
+        try:
+            logging.info("Début de la collecte des baies de stockage (streaming)")
+            count = 0
+            for result in fetch_all_storage_stats():
+                # Envoi immédiat de chaque baie dès qu'elle est prête
+                yield f"data: {json.dumps(result)}\n\n"
+                count += 1
+            logging.info(f"Collecte terminée : {count} baies traitées")
+        except Exception as exc:
+            logging.error(f"Erreur collecte storage: {exc}")
+        yield f"event: end\ndata: {{}}\n\n"
+
+    resp = Response(generate(), mimetype='text/event-stream')
+    resp.headers['Cache-Control']       = 'no-cache'
+    resp.headers['X-Accel-Buffering']   = 'no'
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+@app.route('/api/vmware')
+def api_vmware():
+    """Endpoint synchrone pour le JS d'origine."""
+    user = os.getenv("VC_USER")
+    pwd = os.getenv("VC_PASSWORD")
+    vcenters = [
+        {"name": os.getenv("VC1_NAME", "vCenter 1"), "ip": os.getenv("VC1_IP")},
+        {"name": os.getenv("VC2_NAME", "vCenter 2"), "ip": os.getenv("VC2_IP")},
+        {"name": os.getenv("VC3_NAME", "vCenter 3"), "ip": os.getenv("VC3_IP")},
+        {"name": os.getenv("VC4_NAME", "vCenter 4"), "ip": os.getenv("VC4_IP")},
+        {"name": os.getenv("VC5_NAME", "vCenter 5"), "ip": os.getenv("VC5_IP")},
+        {"name": os.getenv("VC6_NAME", "vCenter 6"), "ip": os.getenv("VC6_IP")},
+        {"name": os.getenv("VC7_NAME", "vCenter 7"), "ip": os.getenv("VC7_IP")},
+    ]
+    valid_vcenters = [vc for vc in vcenters if vc.get("ip")]
+    
+    results = {
+        "vcenter_states": [],
+        "vms": {"on": 0, "off": 0, "suspend": 0, "total": 0},
+        "clusters": [],
+        "datastores": []
+    }
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(valid_vcenters)) as executor:
+        future_to_vc = {executor.submit(fetch_vmware_stats, vc["ip"], user, pwd): vc for vc in valid_vcenters}
+        for future in concurrent.futures.as_completed(future_to_vc):
+            vc = future_to_vc[future]
+            try:
+                data = future.result()
+                state = "UP" if data.get("status") != "error" else "DOWN"
+                results["vcenter_states"].append({"name": vc["name"], "ip": vc["ip"], "state": state})
+                
+                if state == "UP":
+                    results["vms"]["total"] += data["vms"]["total"]
+                    results["vms"]["on"] += data["vms"]["on"]
+                    results["vms"]["off"] += data["vms"]["off"]
+                    results["vms"]["suspend"] += data["vms"]["suspend"]
+                    
+                    for c in data.get("clusters", []):
+                        c["vcenter_name"] = vc["name"]
+                        results["clusters"].append(c)
+                    
+                    for ds in data.get("datastores", []):
+                        ds["vcenter_name"] = vc["name"]
+                        results["datastores"].append(ds)
+            except Exception as e:
+                results["vcenter_states"].append({"name": vc["name"], "ip": vc["ip"], "state": "DOWN", "error": str(e)})
+                
+    return jsonify(results)
+
+@app.route('/api/storage/test')
+def api_storage_test():
+    """Endpoint de diagnostic: teste la connexion à chaque baie configurée."""
+    from storage_health import _build_array_list
+    import os
+    results = []
+    checks = [
+        ("unity",       "UNITY",       8,  "UNITY_USER",       "UNITY_PASSWORD"),
+        ("powerstore",  "POWERSTORE",  3,  "POWERSTORE_USER",  "POWERSTORE_PASSWORD"),
+        ("datadomain",  "DD",          3,  "DD_USER",          "DD_PASSWORD"),
+        ("dorado",      "DORADO",      2,  "DORADO_USER",      "DORADO_PASSWORD"),
+    ]
+    for arr_type, prefix, count, user_key, pwd_key in checks:
+        user = os.getenv(user_key, "")
+        pwd  = os.getenv(pwd_key, "")
+        arrays = _build_array_list(prefix, count, prefix + "_", prefix + "_")
+        for arr in arrays:
+            r = {"name": arr["name"], "ip": arr["ip"], "type": arr_type,
+                 "user_configured": bool(user), "ip_configured": bool(arr["ip"])}
+            if arr["ip"] and user:
+                try:
+                    import requests, urllib3
+                    urllib3.disable_warnings()
+                    # Test TCP basique avant la vraie connexion
+                    import socket
+                    port = 8088 if arr_type == "dorado" else 443
+                    s = socket.create_connection((arr["ip"], port), timeout=5)
+                    s.close()
+                    r["tcp_ok"] = True
+                except Exception as e:
+                    r["tcp_ok"] = False
+                    r["tcp_error"] = str(e)
+            results.append(r)
+    return jsonify(results)
+
+if __name__ == '__main__':
+    # On désactive le reloader sur Windows pour éviter WinError 10038
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
