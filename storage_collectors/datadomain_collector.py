@@ -17,7 +17,7 @@ def _empty_result(name, ip):
     return {
         "name": name, "ip": ip, "type": "datadomain", "state": "DOWN",
         "model": "N/A", "firmware": "N/A", "overall_status": "unknown",
-        "capacity": {"total_tb": 0, "used_tb": 0, "free_tb": 0, "used_pct": 0},
+        "capacity": {"total_gb": 0, "used_gb": 0, "free_gb": 0, "used_pct": 0},
         "compression": {"dedup_ratio": 0, "compression_ratio": 0, "total_savings_pct": 0, "pre_comp_tb": 0},
         "pools": [], "hardware": {"disks_total": 0, "disks_failed": 0, "controllers": []},
         "alerts": [], "performance": {"iops_read": 0, "iops_write": 0, "latency_ms_read": 0, "latency_ms_write": 0, "bandwidth_mbps": 0},
@@ -102,9 +102,9 @@ def collect(ip, name, user, password):
 
                 if total_b:
                     result["capacity"] = {
-                        "total_tb": round(total_b / (1024**4), 2),
-                        "used_tb":  round(used_b  / (1024**4), 2),
-                        "free_tb":  round(free_b  / (1024**4), 2),
+                        "total_gb": round(total_b / (1024**3), 2),
+                        "used_gb":  round(used_b  / (1024**3), 2),
+                        "free_gb":  round(free_b  / (1024**3), 2),
                         "used_pct": round(used_b / total_b * 100, 1) if total_b else 0
                     }
 

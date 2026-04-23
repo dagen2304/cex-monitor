@@ -10,7 +10,7 @@ def _empty_result(name, ip):
     return {
         "name": name, "ip": ip, "type": "powerstore", "state": "DOWN",
         "model": "N/A", "firmware": "N/A", "overall_status": "unknown",
-        "capacity": {"total_tb": 0, "used_tb": 0, "free_tb": 0, "used_pct": 0},
+        "capacity": {"total_gb": 0, "used_gb": 0, "free_gb": 0, "used_pct": 0},
         "pools": [], "hardware": {"disks_total": 0, "disks_failed": 0, "controllers": []},
         "alerts": [], "performance": {"iops_read": 0, "iops_write": 0, "latency_ms_read": 0, "latency_ms_write": 0, "bandwidth_mbps": 0},
         "volumes": {"total": 0}
@@ -72,13 +72,15 @@ def collect(ip, name, user, password):
                 })
 
         # Volumes for capacity estimation
-        r = session.get(f"{base}/volume?select=id,name,size,state&size=2000", timeout=20)
+        r = session.get(f"{base}/volume?select=id,name,size,state", timeout=20)
         if r.status_code in [200, 206]:
             vols = r.json()
             result["volumes"]["total"] = len(vols)
             total_bytes = sum(v.get("size", 0) for v in vols)
             # Approximate usage (PowerStore compresses, so raw is an estimate)
-            result["capacity"]["total_tb"] = round(total_bytes / (1024**4), 2)
+            result["capacity"]["total_gb"] = round(total_bytes / (1024**3), 2)
+            result["capacity"]["used_gb"] = 0 # PowerStore needs metric query for real used
+            result["capacity"]["free_gb"] = result["capacity"]["total_gb"]
             result["capacity"]["used_pct"] = 0  # Real usage via metrics query
 
         # Performance metrics (per appliance)

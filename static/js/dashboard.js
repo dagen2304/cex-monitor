@@ -19,7 +19,10 @@ class Dashboard {
         };
 
         this.data = {
-            vmware: { total: 0, on: 0, off: 0, suspend: 0, clusters: [], datastores: [] },
+            vmware: { 
+                total: 0, on: 0, off: 0, suspend: 0, 
+                clusters: [], datastores: [], vcenters: [] 
+            },
             storage: []
         };
 
@@ -45,6 +48,20 @@ class Dashboard {
         // Manual Refresh
         this.refreshBtn.addEventListener('click', () => {
             this.refreshAll();
+        });
+        
+        // Modal logic
+        document.getElementById('modal-close').addEventListener('click', () => this.closeModal());
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'modal-overlay') this.closeModal();
+        });
+        
+        // Modal Tab switching
+        document.querySelectorAll('.modal-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.getAttribute('data-tab');
+                this.switchModalTab(target);
+            });
         });
     }
 
@@ -84,8 +101,9 @@ class Dashboard {
         this.refreshBtn.classList.add('loading');
         
         // Reset local data counters for a clean UI update
-        this.data.vmware = { total: 0, on: 0, off: 0, suspend: 0, clusters: [], datastores: [] };
-        document.getElementById('clusters-grid').innerHTML = '<div class="empty-state">Rafraîchissement en cours...</div>';
+        this.data.vmware = { total: 0, on: 0, off: 0, suspend: 0, clusters: [], datastores: [], vcenters: [] };
+        document.getElementById('vcenters-grid').innerHTML = '<div class="empty-state">Rafraîchissement en cours...</div>';
+        document.getElementById('clusters-grid').innerHTML = '<div class="empty-state">Attente vCenter...</div>';
         document.getElementById('datastores-body').innerHTML = '';
         document.getElementById('storage-container').innerHTML = '';
 
@@ -138,13 +156,17 @@ class Dashboard {
     // --- DATA HANDLERS ---
 
     handleVMwareUpdate(data) {
-        if (data.state === "UP") {
+        if (data.state === "UP" || data.state === "CONNECTED") {
             // Update Counters
             this.data.vmware.total += data.vms.total;
             this.data.vmware.on += data.vms.on;
             this.data.vmware.off += data.vms.off;
             this.data.vmware.suspend += data.vms.suspend;
             this.updateVMwareCounters();
+
+            // Handle vCenters
+            this.renderVCenter(data);
+            this.updateBadge('badge-vcenters', document.querySelectorAll('.vc-card').length + ' vCenters');
 
             // Handle Clusters
             if (data.clusters) {
@@ -158,6 +180,7 @@ class Dashboard {
                 this.updateBadge('badge-datastores', document.querySelectorAll('#datastores-body tr').length + ' datastores');
             }
         } else {
+            this.renderVCenter(data); // Render even if DOWN to show error
             this.showNotification(`Erreur vCenter: ${data.vcenter} (${data.error || 'Indisponible'})`, 'error');
         }
     }
@@ -169,7 +192,17 @@ class Dashboard {
         const card = document.createElement('div');
         card.className = 'array-card';
         
-        const usagePct = data.capacity ? (data.capacity.used_gb / data.capacity.total_gb * 100).toFixed(1) : 0;
+        let usagePct = 0;
+        if (data.capacity && data.capacity.total_gb > 0) {
+            if (data.capacity.used_pct !== undefined && data.capacity.used_pct !== null) {
+                usagePct = data.capacity.used_pct;
+            } else {
+                const used = data.capacity.used_gb || 0;
+                const total = data.capacity.total_gb;
+                usagePct = ((used / total) * 100).toFixed(1);
+            }
+        }
+        if (isNaN(usagePct)) usagePct = 0;
         const statusClass = usagePct > 90 ? 'red' : (usagePct > 75 ? 'yellow' : 'green');
 
         card.innerHTML = `
@@ -179,9 +212,9 @@ class Dashboard {
                     <h4 style="margin-top:8px; font-size:1.2rem;">${data.name}</h4>
                     <p style="font-size:0.8rem; color:var(--text-muted);">${data.ip}</p>
                 </div>
-                <div class="status-dot ${data.status === 'error' ? 'red' : 'green'}"></div>
+                <div class="status-dot ${data.state === 'DOWN' ? 'red' : 'green'}"></div>
             </div>
-            ${data.status === 'error' ? `
+            ${data.state === 'DOWN' ? `
                 <div style="color:var(--danger); font-size:0.85rem; padding:10px; background:rgba(239,68,68,0.1); border-radius:8px;">
                     ${data.error_msg || 'Connexion échouée'}
                 </div>
@@ -195,8 +228,8 @@ class Dashboard {
                         <div class="progress-fill" style="width: ${usagePct}%; background: ${this.getStatusColor(usagePct)}"></div>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-top:5px; color:var(--text-muted);">
-                        <span>${this.formatBytes(data.capacity.used_gb)}</span>
-                        <span>Total: ${this.formatBytes(data.capacity.total_gb)}</span>
+                        <span>${this.formatBytes(data.capacity.used_gb || 0)} utilisé</span>
+                        <span>Total: ${this.formatBytes(data.capacity.total_gb || 0)}</span>
                     </div>
                 </div>
             `}
@@ -271,6 +304,117 @@ class Dashboard {
     formatBytes(gb) {
         if (gb >= 1024) return (gb / 1024).toFixed(2) + ' TB';
         return Math.round(gb) + ' GB';
+    }
+
+    renderVCenter(vc) {
+        const grid = document.getElementById('vcenters-grid');
+        if (grid.querySelector('.empty-state')) grid.innerHTML = '';
+        
+        let card = document.getElementById(`vc-${vc.vcenter.replace(/\s+/g, '-')}`);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = `vc-${vc.vcenter.replace(/\s+/g, '-')}`;
+            card.className = 'vc-card';
+            grid.appendChild(card);
+        }
+
+        const hostCount = vc.host_list ? vc.host_list.length : 0;
+        const hostMaint = vc.host_list ? vc.host_list.filter(h => h.in_maintenance).length : 0;
+        const hostActive = hostCount - hostMaint;
+        
+        const vmOn = vc.vms ? vc.vms.on : 0;
+        const vmOff = vc.vms ? vc.vms.off : 0;
+
+        card.innerHTML = `
+            <div class="vc-card-header">
+                <span class="vc-name">${vc.vcenter}</span>
+                <div class="status-dot ${vc.state === 'UP' ? 'green' : 'red'}"></div>
+            </div>
+            <div class="vc-stats-grid">
+                <div class="vc-stat-item">
+                    <span class="vc-stat-val">${hostActive} / ${hostMaint}</span>
+                    <span class="vc-stat-lbl">Hôtes (Actifs/Maint)</span>
+                </div>
+                <div class="vc-stat-item">
+                    <span class="vc-stat-val">${vmOn} / ${vmOff}</span>
+                    <span class="vc-stat-lbl">VMs (On/Off)</span>
+                </div>
+            </div>
+        `;
+
+        card.onclick = () => this.openModal(vc);
+    }
+
+    openModal(vc) {
+        const modal = document.getElementById('modal-overlay');
+        document.getElementById('modal-title').textContent = vc.vcenter;
+        document.getElementById('modal-subtitle').textContent = vc.ip;
+        
+        // Populate Hosts
+        const hostsBody = document.getElementById('modal-hosts-body');
+        hostsBody.innerHTML = '';
+        if (vc.host_list) {
+            vc.host_list.forEach(h => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${h.name}</strong></td>
+                    <td>${h.cluster_name}</td>
+                    <td>${h.cpu_ghz} GHz</td>
+                    <td>${h.num_vms}</td>
+                    <td><span class="badge ${h.state === 'connected' ? (h.in_maintenance ? 'yellow' : 'green') : 'red'}">
+                        ${h.state === 'connected' ? (h.in_maintenance ? 'MAINTENANCE' : 'OK') : 'ALERTE'}
+                    </span></td>
+                `;
+                hostsBody.append(row);
+            });
+            document.getElementById('modal-host-count').textContent = vc.host_list.length;
+        }
+
+        // Populate VMs
+        const vmsBody = document.getElementById('modal-vms-body');
+        vmsBody.innerHTML = '';
+        if (vc.vm_list) {
+            vc.vm_list.slice(0, 500).forEach(vm => { // Limit for performance
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${vm.name}</td>
+                    <td><span class="status-dot ${vm.state === 'ON' ? 'green' : 'red'}"></span> ${vm.state}</td>
+                `;
+                vmsBody.append(row);
+            });
+            document.getElementById('modal-vm-count').textContent = vc.vm_list.length;
+        }
+
+        // Alerts (Example: filtering hosts in error)
+        const alertsList = document.getElementById('modal-alerts-list');
+        alertsList.innerHTML = '';
+        const criticalHosts = (vc.host_list || []).filter(h => h.state !== 'connected' || h.overall_status === 'red');
+        if (criticalHosts.length > 0) {
+            criticalHosts.forEach(h => {
+                const item = document.createElement('div');
+                item.className = 'alert-item';
+                item.innerHTML = `<strong>${h.name}</strong> est hors-ligne ou présente une alerte matérielle critique.`;
+                alertsList.appendChild(item);
+            });
+        } else {
+            alertsList.innerHTML = '<p class="empty-state">Aucune alerte critique détectée.</p>';
+        }
+        document.getElementById('modal-alert-count').textContent = criticalHosts.length;
+
+        modal.classList.add('active');
+        this.switchModalTab('hosts');
+    }
+
+    closeModal() {
+        document.getElementById('modal-overlay').classList.remove('active');
+    }
+
+    switchModalTab(tabId) {
+        document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+        document.getElementById(`tab-${tabId}`).classList.add('active');
     }
 
     showNotification(msg, type = 'info') {

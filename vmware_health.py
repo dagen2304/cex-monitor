@@ -195,14 +195,15 @@ def fetch_vmware_stats(vcenter_ip, username, password):
             ds_metrics[ds_obj] = {'cap': cap_bytes, 'free': free_bytes}
             
             if cap_bytes > 0:
-                cap_tb = cap_bytes / (1024**4)
-                free_tb = free_bytes / (1024**4)
-                used_tb = cap_tb - free_tb
+                cap_gb = cap_bytes / (1024**3)
+                free_gb = free_bytes / (1024**3)
+                usage_pct = round(((cap_bytes - free_bytes) / cap_bytes * 100), 1)
 
                 data["datastores"].append({
                     "name": ds.get('name', 'Unknown'),
-                    "used_tb": round(used_tb, 2),
-                    "free_tb": round(free_tb, 2)
+                    "capacity_gb": round(cap_gb, 2),
+                    "free_gb": round(free_gb, 2),
+                    "usage_pct": usage_pct
                 })
 
         # --- Build Clusters output array ---
@@ -220,9 +221,9 @@ def fetch_vmware_stats(vcenter_ip, username, password):
             
             data["clusters"].append({
                 "name": c_stats["name"],
-                "cpu_pct": cpu_pct,
-                "mem_pct": mem_pct,
-                "storage_pct": storage_pct,
+                "cpu_usage_pct": cpu_pct,
+                "mem_usage_pct": mem_pct,
+                "storage_usage_pct": storage_pct,
                 "drs_enabled": c_stats["drs_enabled"],
                 "ha_enabled": c_stats["ha_enabled"],
                 "status": c_stats["status"],

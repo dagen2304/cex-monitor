@@ -18,7 +18,7 @@ def _empty_result(name, ip):
     return {
         "name": name, "ip": ip, "type": "dorado", "state": "DOWN",
         "model": "N/A", "firmware": "N/A", "overall_status": "unknown",
-        "capacity": {"total_tb": 0, "used_tb": 0, "free_tb": 0, "used_pct": 0},
+        "capacity": {"total_gb": 0, "used_gb": 0, "free_gb": 0, "used_pct": 0},
         "pools": [], "hardware": {"disks_total": 0, "disks_failed": 0, "controllers": []},
         "alerts": [], "performance": {"iops_read": 0, "iops_write": 0, "latency_ms_read": 0, "latency_ms_write": 0, "bandwidth_mbps": 0},
         "volumes": {"total": 0}
@@ -89,9 +89,9 @@ def collect(ip, name, user, password):
                     "status": health
                 })
             result["capacity"] = {
-                "total_tb": round(total_cap / (1024**4), 2),
-                "used_tb": round(total_used / (1024**4), 2),
-                "free_tb": round((total_cap - total_used) / (1024**4), 2),
+                "total_gb": round(total_cap / (1024**3), 2),
+                "used_gb": round(total_used / (1024**3), 2),
+                "free_gb": round((total_cap - total_used) / (1024**3), 2),
                 "used_pct": round(total_used / total_cap * 100, 1) if total_cap > 0 else 0
             }
 

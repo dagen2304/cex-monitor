@@ -131,6 +131,16 @@
                             </div>
                         </div>
                     </section>
+                    
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <h3>vCenters</h3>
+                            <span class="badge" id="badge-vcenters">0 vCenters</span>
+                        </div>
+                        <div class="vcenters-grid" id="vcenters-grid">
+                            <div class="empty-state">Collecte des vCenters...</div>
+                        </div>
+                    </section>
 
                     <section class="data-panel">
                         <div class="panel-header">
@@ -178,6 +188,49 @@
     </div>
 
     <!-- Modals / Overlays -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="modal-title">Détails vCenter</h2>
+                    <p id="modal-subtitle">Hôtes et Machines Virtuelles</p>
+                </div>
+                <button class="btn-close" id="modal-close">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div class="modal-tabs">
+                    <button class="modal-tab active" data-tab="hosts">Hôtes (<span id="modal-host-count">0</span>)</button>
+                    <button class="modal-tab" data-tab="vms">VMs (<span id="modal-vm-count">0</span>)</button>
+                    <button class="modal-tab" data-tab="alerts">Alertes (<span id="modal-alert-count">0</span>)</button>
+                </div>
+                <div class="tab-content active" id="tab-hosts">
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr><th>Hôte</th><th>Cluster</th><th>CPU</th><th>VMs</th><th>Status</th></tr>
+                            </thead>
+                            <tbody id="modal-hosts-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-content" id="tab-vms">
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr><th>Nom</th><th>État</th></tr>
+                            </thead>
+                            <tbody id="modal-vms-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-content" id="tab-alerts">
+                    <div id="modal-alerts-list" class="alerts-list">
+                        <p class="empty-state">Aucune alerte critique détectée.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div id="toast-container"></div>
 
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
