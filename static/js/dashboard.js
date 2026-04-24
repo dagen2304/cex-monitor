@@ -26,6 +26,7 @@ class Dashboard {
             storage: []
         };
 
+        this.vcenterFilters = new Set();
         this.init();
     }
 
@@ -53,6 +54,15 @@ class Dashboard {
         // Modal search
         document.getElementById('search-modal-hosts').addEventListener('input', (e) => this.filterTable('modal-hosts-body', e.target.value));
         document.getElementById('search-modal-vms').addEventListener('input', (e) => this.filterTable('modal-vms-body', e.target.value));
+        
+        // Storage Search
+        document.getElementById('search-storage').addEventListener('input', (e) => this.filterTable('storage-detailed-body', e.target.value));
+
+        // vCenter Filter
+        const vcFilter = document.getElementById('filter-clusters-vc');
+        if (vcFilter) {
+            vcFilter.addEventListener('change', (e) => this.filterClustersByVC(e.target.value));
+        }
         
         // Manual Refresh
         this.refreshBtn.addEventListener('click', () => {
@@ -177,10 +187,17 @@ class Dashboard {
             this.renderVCenter(data);
             this.updateBadge('badge-vcenters', document.querySelectorAll('.vc-card').length + ' vCenters');
 
+            // Update vCenter Filter Dropdown
+            if (data.vcenter && !this.vcenterFilters.has(data.vcenter)) {
+                this.vcenterFilters.add(data.vcenter);
+                this.updateVCFilterDropdown();
+            }
+
             // Handle Clusters
             if (data.clusters) {
                 data.clusters.forEach(c => {
-                    this.renderCluster(c);
+                    const clusterWithVC = { ...c, vcenter_name: data.vcenter };
+                    this.renderCluster(clusterWithVC);
                     this.renderDetailedCluster(c, data.vcenter);
                 });
                 this.updateBadge('badge-clusters', document.querySelectorAll('.cluster-card').length + ' clusters');
@@ -199,55 +216,16 @@ class Dashboard {
     }
 
     handleStorageUpdate(data) {
-        const container = document.getElementById('storage-container');
-        if (container.querySelector('.empty-state')) container.innerHTML = '';
-
-        const card = document.createElement('div');
-        card.className = 'array-card';
-        
-        let usagePct = 0;
-        if (data.capacity && data.capacity.total_gb > 0) {
-            if (data.capacity.used_pct !== undefined && data.capacity.used_pct !== null) {
-                usagePct = data.capacity.used_pct;
-            } else {
-                const used = data.capacity.used_gb || 0;
-                const total = data.capacity.total_gb;
-                usagePct = ((used / total) * 100).toFixed(1);
-            }
+        if (data.status === "error") {
+            this.showNotification(`Erreur ${data.name}: ${data.error}`, 'danger');
+            return;
         }
-        if (isNaN(usagePct)) usagePct = 0;
-        const statusClass = usagePct > 90 ? 'red' : (usagePct > 75 ? 'yellow' : 'green');
 
-        card.innerHTML = `
-            <div class="array-header">
-                <div>
-                    <span class="array-type">${data.type || 'Storage'}</span>
-                    <h4 style="margin-top:8px; font-size:1.2rem;">${data.name}</h4>
-                    <p style="font-size:0.8rem; color:var(--text-muted);">${data.ip}</p>
-                </div>
-                <div class="status-dot ${data.state === 'DOWN' ? 'red' : 'green'}"></div>
-            </div>
-            ${data.state === 'DOWN' ? `
-                <div style="color:var(--danger); font-size:0.85rem; padding:10px; background:rgba(239,68,68,0.1); border-radius:8px;">
-                    ${data.error_msg || 'Connexion échouée'}
-                </div>
-            ` : `
-                <div class="resource-row">
-                    <div class="resource-label">
-                        <span>Capacité Utilisée</span>
-                        <span>${usagePct}%</span>
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-fill" style="width: ${usagePct}%; background: ${this.getStatusColor(usagePct)}"></div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-top:5px; color:var(--text-muted);">
-                        <span>${this.formatBytes(data.capacity.used_gb || 0)} utilisé</span>
-                        <span>Total: ${this.formatBytes(data.capacity.total_gb || 0)}</span>
-                    </div>
-                </div>
-            `}
-        `;
-        container.appendChild(card);
+        this.renderArrayCard(data);
+        this.renderDetailedStorage(data);
+        
+        const count = document.querySelectorAll('.array-card').length;
+        this.updateBadge('badge-storage-detailed', count + ' équipements');
     }
 
     // --- RENDERING HELPERS ---
@@ -259,12 +237,45 @@ class Dashboard {
         document.getElementById('count-suspend').textContent = this.data.vmware.suspend;
     }
 
+    updateVCFilterDropdown() {
+        const select = document.getElementById('filter-clusters-vc');
+        if (!select) return;
+        
+        // Keep "All" option
+        select.innerHTML = '<option value="all">Tous les vCenters</option>';
+        Array.from(this.vcenterFilters).sort().forEach(vc => {
+            const opt = document.createElement('option');
+            opt.value = vc;
+            opt.textContent = vc;
+            select.appendChild(opt);
+        });
+    }
+
+    filterClustersByVC(vcName) {
+        const cards = document.querySelectorAll('.cluster-card');
+        cards.forEach(card => {
+            if (vcName === 'all' || card.dataset.vcenter === vcName) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
     renderCluster(c) {
         const grid = document.getElementById('clusters-grid');
         if (grid.querySelector('.empty-state')) grid.innerHTML = '';
 
-        const card = document.createElement('div');
-        card.className = 'cluster-card';
+        const cardId = `cluster-${c.vcenter_name}-${c.name}`.replace(/\s+/g, '-');
+        let card = document.getElementById(cardId);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = cardId;
+            card.className = 'cluster-card';
+            grid.appendChild(card);
+        }
+        
+        card.dataset.vcenter = c.vcenter_name;
         card.innerHTML = `
             <div class="cluster-card-header">
                 <div>
@@ -313,6 +324,93 @@ class Dashboard {
             <td><span class="badge" style="background:${this.getStatusColor(usage)}15; color:${this.getStatusColor(usage)}">${usage > 90 ? 'CRITIQUE' : (usage > 75 ? 'ALERTE' : 'OK')}</span></td>
         `;
         body.appendChild(row);
+    }
+
+    renderArrayCard(data) {
+        const container = document.getElementById('storage-container');
+        if (container.querySelector('.empty-state')) container.innerHTML = '';
+
+        const cardId = `storage-card-${data.name}`.replace(/\s+/g, '-');
+        let card = document.getElementById(cardId);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = cardId;
+            card.className = 'array-card';
+            container.appendChild(card);
+        }
+        
+        const usagePct = data.capacity ? data.capacity.used_pct : 0;
+        const statusClass = data.state === 'DOWN' ? 'red' : (usagePct > 90 ? 'red' : (usagePct > 75 ? 'yellow' : 'green'));
+
+        card.innerHTML = `
+            <div class="array-header">
+                <div>
+                    <span class="array-type">${data.name.split('-')[0] || 'Storage'}</span>
+                    <h4 style="margin-top:8px; font-size:1.2rem;">${data.name}</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">${data.ip}</p>
+                </div>
+                <div class="status-dot ${statusClass}"></div>
+            </div>
+            ${data.state === 'DOWN' ? `
+                <div style="color:var(--danger); font-size:0.85rem; padding:10px; background:rgba(239,68,68,0.1); border-radius:8px;">
+                    Indisponible: ${data.error || 'Connexion échouée'}
+                </div>
+            ` : `
+                <div class="resource-row">
+                    <div class="resource-label">
+                        <span>Capacité Utilisée</span>
+                        <span>${usagePct}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: ${usagePct}%; background: ${this.getStatusColor(usagePct)}"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-top:5px; color:var(--text-muted);">
+                        <span>${this.formatBytes(data.capacity ? data.capacity.used_gb : 0)} utilisé</span>
+                        <span>Total: ${this.formatBytes(data.capacity ? data.capacity.total_gb : 0)}</span>
+                    </div>
+                </div>
+            `}
+        `;
+    }
+
+    renderDetailedStorage(data) {
+        const body = document.getElementById('storage-detailed-body');
+        if (body.querySelector('.text-center')) body.innerHTML = '';
+        
+        const rowId = `row-storage-${data.name}`.replace(/\s+/g, '-');
+        let row = document.getElementById(rowId);
+        if (!row) {
+            row = document.createElement('tr');
+            row.id = rowId;
+            body.appendChild(row);
+        }
+
+        const usagePct = data.capacity ? data.capacity.used_pct : 0;
+        const status = data.overall_status || (data.state === 'DOWN' ? 'Critical' : 'Gray');
+        
+        // Derive attributes
+        const type = data.name.split('-')[0] || 'Unknown';
+        const alarms = (status === 'Red' || status === 'Critical') ? '1 Critique' : (status === 'Yellow' ? '1 Attention' : 'Aucune');
+        const diskHealth = (status === 'Red' || status === 'Critical') ? 'Erreur physique' : 'Optimal';
+        
+        let action = 'RAS';
+        if (status === 'Red' || status === 'Critical') action = 'Vérifier disques / Remplacer';
+        else if (status === 'Yellow') action = 'Surveiller les logs';
+        else if (usagePct > 85) action = 'Prévoir extension capacité';
+
+        row.innerHTML = `
+            <td><span class="vc-tag" style="background:rgba(255,255,255,0.1); color:#fff;">${type}</span></td>
+            <td><strong>${data.name}</strong></td>
+            <td><span class="status-text ${status.toLowerCase()}">${alarms}</span></td>
+            <td>
+                <div class="progress-track" style="width: 80px; display: inline-block; vertical-align: middle; margin-right: 8px;">
+                    <div class="progress-fill ${usagePct > 90 ? 'bg-danger' : 'fill-ram'}" style="width: ${usagePct}%"></div>
+                </div>
+                <span class="text-xs">${usagePct}%</span>
+            </td>
+            <td><span class="status-text ${status.toLowerCase()}">${diskHealth}</span></td>
+            <td><span class="${action !== 'RAS' ? 'text-warning' : ''}" style="font-size:0.85rem;">${action}</span></td>
+        `;
     }
 
     // --- UTILS ---
@@ -579,7 +677,11 @@ class Dashboard {
         const filename = `NOC_Export_${type}_${new Date().toISOString().slice(0,10)}`;
 
         if (format === 'png') {
-            const element = type === 'vcenters' ? document.getElementById('vcenters-grid') : (type === 'clusters-detailed' ? document.getElementById('container-clusters-detailed') : document.getElementById('view-vmware'));
+            const element = type === 'vcenters' ? document.getElementById('vcenters-grid') : 
+                           (type === 'clusters-detailed' ? document.getElementById('container-clusters-detailed') : 
+                           (type === 'storage-detailed' ? document.getElementById('table-storage-detailed').parentElement :
+                           document.getElementById('view-vmware')));
+            
             this.showNotification('Génération de la capture...');
             const canvas = await html2canvas(element, { backgroundColor: '#050508' });
             const link = document.createElement('a');
@@ -591,24 +693,13 @@ class Dashboard {
 
         let dataToExport = [];
         if (type === 'vcenters') {
-            dataToExport.push(['vCenter', 'IP', 'État', 'Hôtes Actifs', 'Hôtes Maint', 'VMs ON', 'VMs OFF']);
-            const cards = document.querySelectorAll('.vc-card');
-            cards.forEach(card => {
-                if (card.style.display !== 'none') {
-                    const name = card.querySelector('.vc-name').innerText;
-                    const ip = card.querySelector('.vc-ip').innerText;
-                    const state = card.querySelector('.status-text').innerText;
-                    const stats = card.querySelectorAll('.vc-stat-val, .vc-stat-sub');
-                    dataToExport.push([name, ip, state, stats[0].innerText, stats[1].innerText, stats[2].innerText, stats[3].innerText]);
-                }
-            });
-        } else if (type === 'clusters-detailed') {
-            const table = document.getElementById('table-clusters-detailed');
+            // ... (keep existing)
+        } else if (type === 'clusters-detailed' || type === 'storage-detailed') {
+            const table = document.getElementById(type === 'clusters-detailed' ? 'table-clusters-detailed' : 'table-storage-detailed');
             const rows = table.querySelectorAll('tr');
             rows.forEach(row => {
                 if (row.style.display !== 'none') {
-                    const rowData = Array.from(row.cells).map(cell => cell.innerText);
-                    dataToExport.push(rowData);
+                    dataToExport.push(Array.from(row.cells).map(cell => cell.innerText));
                 }
             });
         } else {
