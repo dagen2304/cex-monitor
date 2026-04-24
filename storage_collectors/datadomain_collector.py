@@ -1,16 +1,12 @@
 """
 Collecteur Dell EMC Data Domain — REST API
-PORT : 3009 (pas 443 !)
-Auth : POST https://{ip}:3009/rest/v1.0/auth
-Body : {"auth_info": {"username": "...", "password": "..."}}
-Auth type : session cookie (pas de token dans le header)
 """
 import requests
 import urllib3
+import logging
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DD_PORT = 3009
-# On teste v1.0 en premier car c'est la seule qui fonctionne sur DDOS courant
 API_VERSIONS = ["v1.0", "v2.0", "v3.0"]
 
 def _empty_result(name, ip):
@@ -25,49 +21,37 @@ def _empty_result(name, ip):
     }
 
 def _login(session, ip, user, password):
-    """
-    Auth Data Domain via POST /auth
-    Body: {"auth_info": {"username": "...", "password": "..."}}
-    Réponse: cookie de session (pas de token dans le body ni le header)
-    Retourne (base_url, version) ou (None, error).
-    """
     for ver in API_VERSIONS:
         base = f"https://{ip}:{DD_PORT}/rest/{ver}"
         try:
-            r = session.post(
-                f"{base}/auth",
-                json={"auth_info": {"username": user, "password": password}},
-                timeout=15
-            )
+            r = session.post(f"{base}/auth", json={"auth_info": {"username": user, "password": password}}, timeout=10)
             if r.status_code in [200, 201]:
-                # Succès — session cookie automatiquement stockée par requests.Session
-                # Optionnel: récupérer le token s'il est dans le body
-                try:
-                    body = r.json()
-                    token = body.get("auth_info", {}).get("token", "")
-                    if token:
-                        session.headers["X-Auth-Token"] = token
-                except Exception:
-                    pass
-                return base, None
-            elif r.status_code == 401:
-                return None, "Identifiants refusés (HTTP 401)"
-            # 404 = version non disponible, on essaie la suivante
+                # Data Domain uses X-DD-AUTH-TOKEN
+                token = r.headers.get("X-DD-AUTH-TOKEN")
+                if not token:
+                    try: 
+                        data = r.json()
+                        token = data.get("auth_info", {}).get("token")
+                    except: pass
+                
+                if token: 
+                    session.headers["X-DD-AUTH-TOKEN"] = token
+                    return base, None
+                else:
+                    # Some versions return 201 but token is already in headers or session
+                    return base, None
         except Exception as e:
-            return None, str(e)
-    return None, f"Aucune version API disponible sur port {DD_PORT}"
+            logging.debug(f"Auth attempt {ver} failed for {ip}: {e}")
+            continue
+    return None, "Auth failed"
 
 def collect(ip, name, user, password):
     result = _empty_result(name, ip)
     session = requests.Session()
     session.verify = False
-    session.headers.update({
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-    })
+    session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
 
     try:
-        # === Login ===
         base, err = _login(session, ip, user, password)
         if not base:
             result["error"] = err
@@ -75,88 +59,69 @@ def collect(ip, name, user, password):
 
         result["state"] = "UP"
 
-        # === Infos système — endpoints par priorité ===
-        for sys_path in ["/system", "/dd-systems/0"]:
-            r = session.get(f"{base}{sys_path}", timeout=15)
-            if r.status_code == 200:
-                body = r.json()
-                # Format possible: {"system_info": {...}} ou flat
-                sys_data = body.get("system_info", body.get("system", body))
-                result["model"] = sys_data.get("model", sys_data.get("modelNumber", "N/A"))
-                result["firmware"] = sys_data.get("version", sys_data.get("ddosVersion", "N/A"))
-                result["overall_status"] = sys_data.get("status", "OK")
-                break
-
-        # === Filesystem / Capacité + Compression ===
-        for fs_path in ["/dd-systems/0/filesys", "/filesys"]:
-            r = session.get(f"{base}{fs_path}", timeout=15)
-            if r.status_code == 200:
-                body = r.json()
-                fs = body.get("filesys", body.get("filesystem", body))
-
-                # Capacité (valeurs en octets)
-                space = fs.get("space_usage", fs)
-                total_b = space.get("total", space.get("size", 0))
-                used_b  = space.get("used",  space.get("used_size", 0))
-                free_b  = space.get("avail", space.get("available", 0))
-
-                if total_b:
+        # 1. System Info
+        r = session.get(f"{base}/system", timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            sys = data.get("system_info", data)
+            result["model"] = sys.get("model", "N/A")
+            result["firmware"] = sys.get("version", "N/A")
+            result["overall_status"] = "Green" if sys.get("status", "").lower() in ["ok", "normal"] else "Yellow"
+            
+            # Capacity fallback for new API (DDOS 7.x)
+            if "physical_capacity" in sys:
+                pc = sys["physical_capacity"]
+                total = pc.get("total", 0)
+                used = pc.get("used", 0)
+                if total > 0:
                     result["capacity"] = {
-                        "total_gb": round(total_b / (1024**3), 2),
-                        "used_gb":  round(used_b  / (1024**3), 2),
-                        "free_gb":  round(free_b  / (1024**3), 2),
-                        "used_pct": round(used_b / total_b * 100, 1) if total_b else 0
+                        "total_gb": round(float(total) / (1024**3), 2),
+                        "used_gb": round(float(used) / (1024**3), 2),
+                        "free_gb": round((float(total) - float(used)) / (1024**3), 2),
+                        "used_pct": round((float(used) / float(total)) * 100, 1)
                     }
 
-                # Compression / déduplication
-                comp = fs.get("compression", {})
-                if comp:
-                    result["compression"] = {
-                        "dedup_ratio":       round(float(comp.get("local_comp_factor",  0) or 0), 2),
-                        "compression_ratio": round(float(comp.get("global_comp_factor", 0) or 0), 2),
-                        "total_savings_pct": round(float(comp.get("total_comp_factor",  0) or 0), 2),
-                        "pre_comp_tb": round(
-                            float(comp.get("pre_comp_used", 0) or 0) / (1024**4), 2
-                        )
-                    }
-                break
+        # 2. Capacity
+        capacity_paths = ["/filesys", "/dd-systems/0/filesys", "/stats/capacity"]
+        for path in capacity_paths:
+            try:
+                r = session.get(f"{base}{path}", timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    fs = data.get("filesys", data.get("capacity", data.get("filesystem", data)))
+                    if isinstance(fs, list) and len(fs) > 0: fs = fs[0]
+                    
+                    space = fs.get("space_usage", fs.get("storage_usage", fs.get("capacity", fs)))
+                    total = space.get("total", space.get("size", space.get("total_size", space.get("capacity", 0))))
+                    used = space.get("used", space.get("used_size", space.get("used_capacity", 0)))
+                    
+                    if total == 0:
+                        total = fs.get("total_size", fs.get("pre_comp_size", 0))
+                        used = fs.get("used_size", fs.get("pre_comp_used", 0))
 
-        # === Alertes actives ===
-        for alert_path in ["/dd-systems/0/alerts/current-alerts", "/alerts/current-alerts"]:
-            r = session.get(f"{base}{alert_path}", timeout=15)
-            if r.status_code == 200:
-                body = r.json()
-                alert_list = body.get("alert", body.get("alerts", []))
-                for a in (alert_list if isinstance(alert_list, list) else []):
-                    result["alerts"].append({
-                        "severity": str(a.get("severity", "INFO")).upper(),
-                        "message": a.get("message", a.get("description", "N/A"))
-                    })
-                break
+                    if total > 0 and result["capacity"]["total_gb"] == 0:
+                        result["capacity"] = {
+                            "total_gb": round(float(total) / (1024**3), 2),
+                            "used_gb": round(float(used) / (1024**3), 2),
+                            "free_gb": round((float(total) - float(used)) / (1024**3), 2),
+                            "used_pct": round((float(used) / float(total)) * 100, 1)
+                        }
+                        break
+            except:
+                continue
 
-        # === Disques ===
-        for disk_path in ["/dd-systems/0/disk", "/disk"]:
-            r = session.get(f"{base}{disk_path}", timeout=15)
-            if r.status_code == 200:
-                body = r.json()
-                disks = body.get("disk", body.get("disks", []))
-                result["hardware"]["disks_total"] = len(disks)
-                result["hardware"]["disks_failed"] = sum(
-                    1 for d in disks
-                    if str(d.get("state", "normal")).upper() not in ["NORMAL", "OK", "ACTIVE"]
-                )
-                break
+        # 3. Hardware
+        r = session.get(f"{base}/dd-systems/0/disk", timeout=10)
+        if r.status_code == 200:
+            disks = r.json().get("disk", [])
+            result["hardware"]["disks_total"] = len(disks)
+            result["hardware"]["disks_failed"] = sum(1 for d in disks if d.get("state","").lower() not in ["normal", "ok", "active"])
 
     except Exception as e:
         result["state"] = "DOWN"
         result["error"] = str(e)
-
     finally:
-        # Déconnexion propre
-        try:
-            if base:
-                session.delete(f"{base}/auth", timeout=5)
-        except Exception:
-            pass
+        try: session.delete(f"{base}/auth", timeout=5)
+        except: pass
 
     return result

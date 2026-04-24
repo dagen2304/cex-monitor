@@ -9,9 +9,9 @@ urllib3.disable_warnings()
 
 SEP = "=" * 65
 
-def ok(msg):  print(f"  ✅ {msg}")
-def ko(msg):  print(f"  ❌ {msg}")
-def inf(msg): print(f"  ℹ️  {msg}")
+def ok(msg):  print(f"  [OK] {msg}")
+def ko(msg):  print(f"  [KO] {msg}")
+def inf(msg): print(f"  [INF] {msg}")
 
 # ─────────────────────────────────────────────
 def test_dorado(name, ip, user, pwd):
