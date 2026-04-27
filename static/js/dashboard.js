@@ -356,17 +356,39 @@ class Dashboard {
                     Indisponible: ${data.error || 'Connexion échouée'}
                 </div>
             ` : `
-                <div class="resource-row">
-                    <div class="resource-label">
-                        <span>Capacité Utilisée</span>
-                        <span>${usagePct}%</span>
+                <div class="storage-pools-container" style="display:flex; flex-direction:column; gap:20px;">
+                    <!-- Main Aggregate (Optional, but useful as a summary) -->
+                    <div class="resource-row summary-row" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1);">
+                        <div class="resource-label">
+                            <span style="font-weight:800; color:#fff;">CAPACITÉ GLOBALE</span>
+                            <span style="font-weight:800; color:var(--primary);">${usagePct}%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" style="width: ${usagePct}%; background: ${this.getStatusColor(usagePct)}"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-top:5px; color:var(--text-muted);">
+                            <span>${this.formatBytes(data.capacity ? data.capacity.used_gb : 0)} utilisé</span>
+                            <span>Total: ${this.formatBytes(data.capacity ? data.capacity.total_gb : 0)}</span>
+                        </div>
                     </div>
-                    <div class="progress-track">
-                        <div class="progress-fill" style="width: ${usagePct}%; background: ${this.getStatusColor(usagePct)}"></div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-top:5px; color:var(--text-muted);">
-                        <span>${this.formatBytes(data.capacity ? data.capacity.used_gb : 0)} utilisé</span>
-                        <span>Total: ${this.formatBytes(data.capacity ? data.capacity.total_gb : 0)}</span>
+
+                    <!-- Individual Pools -->
+                    <div class="pools-list" style="display:flex; flex-direction:column; gap:12px; padding-left: 10px; border-left: 2px solid rgba(255,255,255,0.05);">
+                        ${(data.pools || []).map(pool => `
+                            <div class="pool-item">
+                                <div class="resource-label" style="font-size: 0.7rem; margin-bottom: 4px;">
+                                    <span style="color:var(--text-muted);">${pool.name}</span>
+                                    <span>${pool.used_pct}%</span>
+                                </div>
+                                <div class="progress-track" style="height: 6px;">
+                                    <div class="progress-fill" style="width: ${pool.used_pct}%; background: ${this.getStatusColor(pool.used_pct)}; opacity: 0.8;"></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:var(--text-dim); margin-top:2px;">
+                                    <span>${pool.used_tb} TB</span>
+                                    <span>${pool.total_tb} TB</span>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             `}

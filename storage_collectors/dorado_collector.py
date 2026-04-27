@@ -70,15 +70,17 @@ def collect(ip, name, user, password):
         r = session.get(f"{base}/storagepool", timeout=15)
         if r.status_code == 200 and r.json().get("error", {}).get("code", -1) == 0:
             total_cap, total_used = 0, 0
-            for pool in r.json().get("data", []):
-                # Huawei returns capacity in sectors (512 bytes) or MB depending on version
+            pools_data = r.json().get("data", [])
+            
+            for pool in pools_data:
                 raw_total = int(pool.get("USERTOTALCAPACITY", 0))
                 raw_used = int(pool.get("USERCONSUMEDCAPACITY", 0))
-                # Convert from 512-byte sectors to bytes
                 cap_bytes = raw_total * 512
                 used_bytes = raw_used * 512
+                
                 total_cap += cap_bytes
                 total_used += used_bytes
+                
                 health = "OK" if pool.get("HEALTHSTATUS") == "1" else "DEGRADED"
                 result["pools"].append({
                     "name": pool.get("NAME", "N/A"),
@@ -88,6 +90,7 @@ def collect(ip, name, user, password):
                     "raid": pool.get("DISKDOMAINTYPE", "N/A"),
                     "status": health
                 })
+
             result["capacity"] = {
                 "total_gb": round(total_cap / (1024**3), 2),
                 "used_gb": round(total_used / (1024**3), 2),
