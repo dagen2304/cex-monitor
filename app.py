@@ -53,6 +53,7 @@ def api_vmware_stream():
             logging.info(f"Connexion réussie au vCenter {vc['name']} ({vc['ip']})")
             result["state"] = "UP"
             result["vms"] = vc_data["vms"]
+            result["global_metrics"] = vc_data.get("global_metrics", {"cpu": 0, "ram": 0, "storage": 0})
             result["host_list"] = vc_data.get("host_list", [])
             result["vm_list"] = vc_data.get("vm_list", [])
             

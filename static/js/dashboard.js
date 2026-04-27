@@ -477,7 +477,27 @@ class Dashboard {
                         <span class="vc-stat-sep">/</span>
                         <span class="vc-stat-sub text-muted">${vmOff}</span>
                     </div>
-                    <span class="vc-stat-lbl">Machines Virtuelles</span>
+                    <span class="vc-stat-lbl">VMs Actives/OFF</span>
+                </div>
+            </div>
+            <div class="vc-resource-usage">
+                <div class="resource-row">
+                    <div class="resource-label">
+                        <span>CPU Global</span>
+                        <span>${vc.global_metrics ? vc.global_metrics.cpu : 0}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill fill-cpu" style="width: ${vc.global_metrics ? vc.global_metrics.cpu : 0}%"></div>
+                    </div>
+                </div>
+                <div class="resource-row">
+                    <div class="resource-label">
+                        <span>RAM Globale</span>
+                        <span>${vc.global_metrics ? vc.global_metrics.ram : 0}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill fill-ram" style="width: ${vc.global_metrics ? vc.global_metrics.ram : 0}%"></div>
+                    </div>
                 </div>
             </div>
             <div class="vc-card-footer">

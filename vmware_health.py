@@ -232,6 +232,18 @@ def fetch_vmware_stats(vcenter_ip, username, password):
                 "total_vms": c_stats["total_vms"]
             })
 
+        # --- 5. GLOBAL vCENTER METRICS ---
+        total_cpu_mhz = sum(c["cpu_mhz"] for c in cluster_data_map.values())
+        total_used_cpu = sum(c["used_cpu"] for c in cluster_data_map.values())
+        total_mem_bytes = sum(c["mem_bytes"] for c in cluster_data_map.values())
+        total_used_mem = sum(c["used_mem"] for c in cluster_data_map.values())
+        total_storage_cap = sum(c["storage_cap_bytes"] for c in cluster_data_map.values())
+        total_storage_free = sum(c["storage_free_bytes"] for c in cluster_data_map.values())
+
+        data["global_metrics"]["cpu"] = round((total_used_cpu / total_cpu_mhz * 100), 1) if total_cpu_mhz > 0 else 0
+        data["global_metrics"]["ram"] = round(((total_used_mem / 1024) / (total_mem_bytes / (1024**3)) * 100), 1) if total_mem_bytes > 0 else 0
+        data["global_metrics"]["storage"] = round(((total_storage_cap - total_storage_free) / total_storage_cap * 100), 1) if total_storage_cap > 0 else 0
+
     except Exception as e:
         data["status"] = "error"
         data["error_msg"] = str(e)

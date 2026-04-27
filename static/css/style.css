@@ -818,11 +818,17 @@ body {
 .status-text.red { color: var(--danger); }
 
 .vc-stats-grid {
-    padding: 24px;
+    padding: 24px 28px 0 28px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
-    flex: 1;
+}
+
+.vc-resource-usage {
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .vc-stat-item {
