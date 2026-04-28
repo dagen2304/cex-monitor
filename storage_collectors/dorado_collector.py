@@ -20,7 +20,7 @@ def _empty_result(name, ip):
         "model": "N/A", "firmware": "N/A", "overall_status": "unknown",
         "capacity": {"total_gb": 0, "used_gb": 0, "free_gb": 0, "used_pct": 0},
         "pools": [], "hardware": {"disks_total": 0, "disks_failed": 0, "controllers": []},
-        "alerts": [], "performance": {"iops_read": 0, "iops_write": 0, "latency_ms_read": 0, "latency_ms_write": 0, "bandwidth_mbps": 0},
+        "alerts": [], "performance": {"iops_total": 0, "bandwidth_mbps": 0, "latency_ms": 0},
         "volumes": {"total": 0}
     }
 
@@ -120,14 +120,28 @@ def collect(ip, name, user, password):
             for alarm in r.json().get("data", []):
                 sev_code = str(alarm.get("alarmLevel", "4"))
                 result["alerts"].append({
+                    "id": alarm.get("sequence", "N/A"),
                     "severity": HUAWEI_SEV.get(sev_code, "INFO"),
-                    "message": alarm.get("alarmName", alarm.get("description", "N/A"))
+                    "message": alarm.get("alarmName", alarm.get("description", "N/A")),
+                    "timestamp": alarm.get("startTime", "N/A"),
+                    "component": alarm.get("objectName", "Storage")
                 })
 
         # Step 7: Volumes (LUNs)
         r = session.get(f"{base}/lun?range=[0-99]", timeout=15)
         if r.status_code == 200 and r.json().get("error", {}).get("code", -1) == 0:
             result["volumes"]["total"] = len(r.json().get("data", []))
+
+        # Step 8: Performance
+        # Stats globales du système (ID 0)
+        r = session.get(f"{base}/performancestatistictask/0", timeout=10)
+        if r.status_code == 200 and r.json().get("error", {}).get("code", -1) == 0:
+            p = r.json().get("data", {})
+            result["performance"] = {
+                "iops_total": round(float(p.get("IOPS", 0)), 0),
+                "bandwidth_mbps": round(float(p.get("BANDWIDTH", 0)) / 1024, 2),
+                "latency_ms": round(float(p.get("LATENCY", 0)) / 1000, 2)
+            }
 
         # Step 8: Logout
         try:

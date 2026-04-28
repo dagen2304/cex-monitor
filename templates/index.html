@@ -43,6 +43,16 @@
                         <span class="icon">●</span> Baies de Stockage
                     </button>
                 </div>
+
+                <div class="nav-group">
+                    <span class="group-title">Système</span>
+                    <button class="nav-link" data-view="alerts" id="btn-alerts">
+                        <span class="icon">●</span> Alertes Globales
+                    </button>
+                    <button class="nav-link" data-view="diagnostics" id="btn-diagnostics">
+                        <span class="icon">●</span> Diagnostics API
+                    </button>
+                </div>
             </nav>
             
             <div class="sidebar-footer">
@@ -266,14 +276,73 @@
                                     <tr>
                                         <th onclick="dashboard.sortTable('table-storage-detailed', 0)">TYPE</th>
                                         <th onclick="dashboard.sortTable('table-storage-detailed', 1)">Équipement</th>
-                                        <th onclick="dashboard.sortTable('table-storage-detailed', 2)">Alarme(s) active(s)</th>
-                                        <th onclick="dashboard.sortTable('table-storage-detailed', 3)">Usage (%)</th>
-                                        <th onclick="dashboard.sortTable('table-storage-detailed', 4)">État des disques</th>
-                                        <th onclick="dashboard.sortTable('table-storage-detailed', 5)">Action recommandée</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 2)">IOPS</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 3)">Débit (MB/s)</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 4)">Latence (ms)</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 5)">Usage (%)</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 6)">État des disques</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 7)">Action recommandée</th>
                                     </tr>
                                 </thead>
                                 <tbody id="storage-detailed-body">
                                     <tr><td colspan="6" class="text-center">En attente de données...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Alerts View -->
+                <div id="view-alerts" class="view-pane">
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Journal des Alertes Critiques</h3>
+                                <span class="badge" id="badge-total-alerts">0 alertes</span>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="premium-table sortable" id="table-global-alerts">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Source</th>
+                                        <th>Composant</th>
+                                        <th>Sévérité</th>
+                                        <th>Message</th>
+                                        <th>Date détectée</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="global-alerts-body">
+                                    <tr><td colspan="4" class="text-center">Aucune alerte en cours.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Diagnostics View -->
+                <div id="view-diagnostics" class="view-pane">
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>État du Monitoring & Cache</h3>
+                                <span class="badge" id="badge-diag-items">0 items</span>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="premium-table" id="table-diagnostics">
+                                <thead>
+                                    <tr>
+                                        <th>Composant</th>
+                                        <th>Dernier Succès</th>
+                                        <th>Appels Cache</th>
+                                        <th>Erreurs</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="diagnostics-body">
+                                    <tr><td colspan="5" class="text-center">Chargement des diagnostics...</td></tr>
                                 </tbody>
                             </table>
                         </div>

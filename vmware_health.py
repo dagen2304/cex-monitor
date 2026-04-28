@@ -64,6 +64,7 @@ def fetch_vmware_stats(vcenter_ip, username, password):
         "vm_list": [],
         "vms": {"on": 0, "off": 0, "suspend": 0, "total": 0},
         "datastores": [],
+        "alerts": [],
         "global_metrics": {"cpu": 0, "ram": 0, "storage": 0}
     }
 
@@ -243,6 +244,23 @@ def fetch_vmware_stats(vcenter_ip, username, password):
         data["global_metrics"]["cpu"] = round((total_used_cpu / total_cpu_mhz * 100), 1) if total_cpu_mhz > 0 else 0
         data["global_metrics"]["ram"] = round(((total_used_mem / 1024) / (total_mem_bytes / (1024**3)) * 100), 1) if total_mem_bytes > 0 else 0
         data["global_metrics"]["storage"] = round(((total_storage_cap - total_storage_free) / total_storage_cap * 100), 1) if total_storage_cap > 0 else 0
+
+        # --- 6. ALERTS (Active Alarms) ---
+        try:
+            # On récupère les alarmes déclenchées (triggeredAlarms) sur le rootFolder
+            alarms = si.content.rootFolder.triggeredAlarmState
+            if alarms:
+                for alarm in alarms:
+                    if alarm.overallStatus in [vim.ManagedEntity.Status.red, vim.ManagedEntity.Status.yellow]:
+                        data["alerts"].append({
+                            "id": str(alarm.key),
+                            "severity": "CRITICAL" if alarm.overallStatus == vim.ManagedEntity.Status.red else "WARNING",
+                            "message": f"Alarme sur {getattr(alarm.entity, 'name', 'Inconnu')}",
+                            "timestamp": str(alarm.time),
+                            "component": alarm.entity.__class__.__name__
+                        })
+        except Exception as e:
+            logging.error(f"Erreur lors de la récupération des alarmes vCenter {vcenter_ip}: {e}")
 
     except Exception as e:
         data["status"] = "error"

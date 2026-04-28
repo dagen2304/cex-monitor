@@ -31,6 +31,7 @@ def collect(ip, name, user, password):
         r = session.get(f"{base}/appliance?select=*", timeout=60)
         if r.status_code != 200 or not r.json():
             result["error"] = f"Appliance query failed: {r.status_code}"
+            result["overall_status"] = "Red"
             return result
         
         appl = r.json()[0]
@@ -100,6 +101,18 @@ def collect(ip, name, user, password):
             ps_state = r.json()[0].get("state", "unknown")
             status_map = {"Healthy": "Green", "Configured": "Green", "Minor_Failure": "Yellow", "Major_Failure": "Red"}
             result["overall_status"] = status_map.get(ps_state, "Gray")
+
+        # 5. Alerts (Active)
+        r = session.get(f"{base}/alert?select=id,severity,description,resource_name,timestamp&severity=neq.Info&is_acknowledged=eq.false", timeout=15)
+        if r.status_code == 200:
+            for a in r.json():
+                result["alerts"].append({
+                    "id": a.get("id"),
+                    "severity": a.get("severity", "Warning").upper(),
+                    "message": a.get("description", "N/A"),
+                    "timestamp": a.get("timestamp", "N/A"),
+                    "component": a.get("resource_name", "Appliance")
+                })
 
     except Exception as e:
         result["state"] = "DOWN"

@@ -1,0 +1,8 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+vCenter.log
+.env
+.idea/
+.vscode/

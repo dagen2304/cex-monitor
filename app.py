@@ -6,6 +6,37 @@ from dotenv import load_dotenv
 from vmware_health import fetch_vmware_stats
 from storage_health import fetch_all_storage_stats
 import logging
+import time
+from threading import Lock
+
+# --- Système de Cache Simple ---
+class SimpleCache:
+    def __init__(self, ttl=120):
+        self.cache = {}
+        self.ttl = ttl
+        self.lock = Lock()
+        self.diagnostics = {}
+
+    def get(self, key):
+        with self.lock:
+            if key in self.cache:
+                val, timestamp = self.cache[key]
+                if time.time() - timestamp < self.ttl:
+                    return val
+            return None
+
+    def set(self, key, value):
+        with self.lock:
+            self.cache[key] = (value, time.time())
+            # Update diagnostics
+            if key not in self.diagnostics:
+                self.diagnostics[key] = {"count": 0, "errors": 0, "last_time": 0}
+            self.diagnostics[key]["count"] += 1
+            self.diagnostics[key]["last_time"] = time.time()
+            if isinstance(value, dict) and value.get("state") == "DOWN":
+                self.diagnostics[key]["errors"] += 1
+
+global_cache = SimpleCache(ttl=120)
 
 # Configuration du logging
 logging.basicConfig(
@@ -37,14 +68,19 @@ def api_vmware_stream():
         {"name": os.getenv("VC6_NAME", "vCenter 6"), "ip": os.getenv("VC6_IP")},
         {"name": os.getenv("VC7_NAME", "vCenter 7"), "ip": os.getenv("VC7_IP")},
     ]
-
     def fetch_vc(vc):
         if not vc.get("ip"): return None
         
+        cache_key = f"vc_{vc['ip']}"
+        cached = global_cache.get(cache_key)
+        if cached: return cached
+
         logging.info(f"Tentative de connexion au vCenter {vc['name']} ({vc['ip']})")
+        start_time = time.time()
         vc_data = fetch_vmware_stats(vc["ip"], user, pwd)
+        duration = round(time.time() - start_time, 2)
         
-        result = {"vcenter": vc["name"], "ip": vc["ip"]}
+        result = {"vcenter": vc["name"], "ip": vc["ip"], "latency": duration}
         if vc_data.get("status") == "error":
             logging.error(f"Échec de la connexion au vCenter {vc['name']} ({vc['ip']}): {vc_data.get('error_msg')}")
             result["state"] = "DOWN"
@@ -56,6 +92,7 @@ def api_vmware_stream():
             result["global_metrics"] = vc_data.get("global_metrics", {"cpu": 0, "ram": 0, "storage": 0})
             result["host_list"] = vc_data.get("host_list", [])
             result["vm_list"] = vc_data.get("vm_list", [])
+            result["alerts"] = vc_data.get("alerts", [])
             
             result["clusters"] = []
             for cluster in vc_data.get("clusters", []):
@@ -66,7 +103,8 @@ def api_vmware_stream():
             for ds in vc_data.get("datastores", []):
                 ds["vcenter_name"] = vc["name"]
                 result["datastores"].append(ds)
-                
+        
+        global_cache.set(cache_key, result)
         return result
 
     def generate():
@@ -100,6 +138,8 @@ def api_storage_stream():
             logging.info("Début de la collecte des baies de stockage (streaming)")
             count = 0
             for result in fetch_all_storage_stats():
+                cache_key = f"storage_{result['ip'] or result['name']}"
+                global_cache.set(cache_key, result)
                 # Envoi immédiat de chaque baie dès qu'elle est prête
                 yield f"data: {json.dumps(result)}\n\n"
                 count += 1
@@ -198,6 +238,15 @@ def api_storage_test():
                     r["tcp_error"] = str(e)
             results.append(r)
     return jsonify(results)
+
+@app.route('/api/diagnostics')
+def api_diagnostics():
+    """Retourne l'état du cache et les stats de collecte."""
+    return jsonify({
+        "timestamp": time.time(),
+        "cache_size": len(global_cache.cache),
+        "details": global_cache.diagnostics
+    })
 
 if __name__ == '__main__':
     # On désactive le reloader sur Windows pour éviter WinError 10038

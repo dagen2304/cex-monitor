@@ -7,7 +7,9 @@ class Dashboard {
     constructor() {
         this.views = {
             vmware: document.getElementById('view-vmware'),
-            storage: document.getElementById('view-storage')
+            storage: document.getElementById('view-storage'),
+            alerts: document.getElementById('view-alerts'),
+            diagnostics: document.getElementById('view-diagnostics')
         };
         
         this.navLinks = document.querySelectorAll('.nav-link');
@@ -98,10 +100,15 @@ class Dashboard {
         // Update Header
         const titles = {
             vmware: { title: 'VMware vSphere', sub: 'Supervision Multi-vCenter' },
-            storage: { title: 'Baies de Stockage', sub: 'Performance & Capacité SAN/NAS' }
+            storage: { title: 'Baies de Stockage', sub: 'Performance & Capacité SAN/NAS' },
+            alerts: { title: 'Alertes Globales', sub: 'Synthèse des incidents critiques' },
+            diagnostics: { title: 'Diagnostics API', sub: 'État du cache et du monitoring' }
         };
         document.getElementById('current-view-title').textContent = titles[viewName].title;
         document.getElementById('current-view-subtitle').textContent = titles[viewName].sub;
+
+        if (viewName === 'diagnostics') this.fetchDiagnostics();
+        if (viewName === 'alerts') this.renderGlobalAlerts();
     }
 
     startClock() {
@@ -183,6 +190,26 @@ class Dashboard {
             this.data.vmware.suspend += data.vms.suspend;
             this.updateVMwareCounters();
 
+            // Handle Global Alerts from vCenter
+            if (data.error) {
+                this.addGlobalAlert(data.vcenter, 'CRITICAL', data.error, 'System', `CONN_ERR_${data.ip || data.vcenter}`);
+            }
+            
+            // Host connection alerts
+            if (data.host_list) {
+                data.host_list.forEach(h => {
+                    if (h.state !== 'connected') {
+                        this.addGlobalAlert(data.vcenter, 'CRITICAL', `Hôte ESXi déconnecté: ${h.name}`, 'Host', `HOST_DOWN_${h.name}`);
+                    }
+                });
+            }
+
+            if (data.alerts && data.alerts.length > 0) {
+                data.alerts.forEach(a => {
+                    this.addGlobalAlert(data.vcenter, a.severity, a.message, a.component, a.id, a.timestamp);
+                });
+            }
+
             // Handle vCenters
             this.renderVCenter(data);
             this.updateBadge('badge-vcenters', document.querySelectorAll('.vc-card').length + ' vCenters');
@@ -223,6 +250,20 @@ class Dashboard {
 
         this.renderArrayCard(data);
         this.renderDetailedStorage(data);
+
+        // Handle Global Alerts from Storage
+        if (data.state === 'DOWN' || data.error) {
+            const sev = (data.state === 'DOWN') ? 'CRITICAL' : 'WARNING';
+            this.addGlobalAlert(data.name, sev, data.error || 'Baie injoignable', 'Storage', `CONN_ERR_${data.ip || data.name}`);
+        }
+        
+        if (data.alerts && data.alerts.length > 0) {
+            data.alerts.forEach(a => {
+                if (a.severity === 'CRITICAL' || a.severity === 'ERROR' || a.severity === 'MAJOR' || a.severity === 'WARNING') {
+                    this.addGlobalAlert(data.name, a.severity, a.message, a.component, a.id, a.timestamp);
+                }
+            });
+        }
         
         const count = document.querySelectorAll('.array-card').length;
         this.updateBadge('badge-storage-detailed', count + ' équipements');
@@ -410,6 +451,12 @@ class Dashboard {
         const usagePct = data.capacity ? data.capacity.used_pct : 0;
         const status = data.overall_status || (data.state === 'DOWN' ? 'Critical' : 'Gray');
         
+        // Performance data
+        const perf = data.performance || { iops_total: 0, bandwidth_mbps: 0, latency_ms: 0 };
+        const iops = perf.iops_total || (perf.iops_read + perf.iops_write) || 0;
+        const bw = perf.bandwidth_mbps || 0;
+        const lat = perf.latency_ms || perf.latency_ms_read || 0;
+
         // Derive attributes
         const type = data.name.split('-')[0] || 'Unknown';
         const alarms = (status === 'Red' || status === 'Critical') ? '1 Critique' : (status === 'Yellow' ? '1 Attention' : 'Aucune');
@@ -423,7 +470,9 @@ class Dashboard {
         row.innerHTML = `
             <td><span class="vc-tag" style="background:rgba(255,255,255,0.1); color:#fff;">${type}</span></td>
             <td><strong>${data.name}</strong></td>
-            <td><span class="status-text ${status.toLowerCase()}">${alarms}</span></td>
+            <td class="font-mono">${iops.toLocaleString()}</td>
+            <td class="font-mono">${bw.toFixed(1)}</td>
+            <td class="font-mono">${lat.toFixed(2)}</td>
             <td>
                 <div class="progress-track" style="width: 80px; display: inline-block; vertical-align: middle; margin-right: 8px;">
                     <div class="progress-fill ${usagePct > 90 ? 'bg-danger' : 'fill-ram'}" style="width: ${usagePct}%"></div>
@@ -433,6 +482,96 @@ class Dashboard {
             <td><span class="status-text ${status.toLowerCase()}">${diskHealth}</span></td>
             <td><span class="${action !== 'RAS' ? 'text-warning' : ''}" style="font-size:0.85rem;">${action}</span></td>
         `;
+    }
+
+    addGlobalAlert(source, severity, message, component = 'N/A', id = 'N/A', timestamp = null) {
+        if (!this.data.globalAlerts) this.data.globalAlerts = [];
+        
+        // Normalisation de l'ID
+        const alertId = (id && id !== 'N/A' && id !== 'null') ? id : null;
+        
+        // Vérification de doublon
+        const isDuplicate = this.data.globalAlerts.some(a => {
+            if (alertId && a.id === alertId) return true;
+            return a.source === source && a.message === message;
+        });
+
+        if (isDuplicate) return;
+        
+        this.data.globalAlerts.push({
+            id: alertId || 'N/A', 
+            source, severity, message, component,
+            timestamp: timestamp ? new Date(timestamp) : new Date()
+        });
+        this.updateBadge('badge-total-alerts', this.data.globalAlerts.length + ' alertes');
+        
+        // Rafraîchir la vue si on est sur l'onglet alertes
+        if (this.currentView === 'alerts') {
+            this.renderGlobalAlerts();
+        }
+        
+        if (severity === 'CRITICAL' || severity === 'MAJOR' || severity === 'ERROR') {
+            this.showNotification(`ALERTE CRITIQUE: ${source} - ${message}`, 'error');
+        }
+    }
+
+    renderGlobalAlerts() {
+        const body = document.getElementById('global-alerts-body');
+        if (!this.data.globalAlerts || this.data.globalAlerts.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="text-center">Aucune alerte en cours.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = '';
+        // Trier par date décroissante
+        const sorted = [...this.data.globalAlerts].sort((a, b) => b.timestamp - a.timestamp);
+        
+        sorted.forEach(a => {
+            const row = document.createElement('tr');
+            const sev = a.severity.toLowerCase();
+            const badgeClass = (sev === 'critical' || sev === 'error' || sev === 'major') ? 'danger' : 'warning';
+            
+            row.innerHTML = `
+                <td><code class="text-xs">${a.id}</code></td>
+                <td><strong>${a.source}</strong></td>
+                <td><span class="vc-tag" style="background:rgba(255,255,255,0.05);">${a.component}</span></td>
+                <td><span class="badge ${badgeClass}">${a.severity}</span></td>
+                <td style="max-width:400px; white-space: normal; line-height:1.4;">${a.message}</td>
+                <td class="font-mono text-xs">${a.timestamp.toLocaleString()}</td>
+            `;
+            body.appendChild(row);
+        });
+    }
+
+    async fetchDiagnostics() {
+        const body = document.getElementById('diagnostics-body');
+        body.innerHTML = '<tr><td colspan="5" class="text-center">Récupération des données...</td></tr>';
+
+        try {
+            const resp = await fetch('/api/diagnostics');
+            const data = await resp.json();
+            
+            body.innerHTML = '';
+            let count = 0;
+            for (const [key, stat] of Object.entries(data.details)) {
+                count++;
+                const row = document.createElement('tr');
+                const lastSeen = new Date(stat.last_time * 1000).toLocaleTimeString();
+                const status = stat.errors > 0 ? 'FAIL' : 'OK';
+                
+                row.innerHTML = `
+                    <td><code>${key}</code></td>
+                    <td>${lastSeen}</td>
+                    <td>${stat.count}</td>
+                    <td><span class="${stat.errors > 0 ? 'text-danger' : ''}">${stat.errors}</span></td>
+                    <td><span class="badge ${status === 'OK' ? 'success' : 'danger'}">${status}</span></td>
+                `;
+                body.appendChild(row);
+            }
+            this.updateBadge('badge-diag-items', count + ' items');
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Erreur: ${e.message}</td></tr>`;
+        }
     }
 
     // --- UTILS ---

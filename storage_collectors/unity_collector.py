@@ -26,7 +26,7 @@ def _empty_result(name, ip):
         "model": "N/A", "firmware": "N/A", "overall_status": "unknown",
         "capacity": {"total_gb": 0, "used_gb": 0, "free_gb": 0, "used_pct": 0},
         "pools": [], "hardware": {"disks_total": 0, "disks_failed": 0, "controllers": []},
-        "alerts": [], "performance": {"iops_read": 0, "iops_write": 0, "latency_ms_read": 0, "latency_ms_write": 0, "bandwidth_mbps": 0},
+        "alerts": [], "performance": {"iops_total": 0, "bandwidth_mbps": 0, "latency_ms": 0},
         "volumes": {"total": 0}
     }
 
@@ -103,6 +103,7 @@ def collect(ip, name, user, password):
     session, base, err = _setup_session(ip, user, password)
     if not session:
         result["error"] = err
+        result["overall_status"] = "Red"
         return result
 
     result["state"] = "UP"
@@ -149,8 +150,11 @@ def collect(ip, name, user, password):
             for entry in r.json().get("entries", []):
                 a = entry.get("content", {})
                 result["alerts"].append({
+                    "id": a.get("id", "N/A"),
                     "severity": SEV_MAP.get(a.get("severity", 2), "INFO"),
-                    "message": a.get("message", "N/A")
+                    "message": a.get("message", "N/A"),
+                    "timestamp": a.get("timestamp", "N/A"),
+                    "component": a.get("component", "System")
                 })
 
         # === Disques ===
@@ -177,6 +181,17 @@ def collect(ip, name, user, password):
         r = session.get(f"{base}/types/lun/instances?fields=name&compact=true", timeout=15)
         if r.status_code == 200:
             result["volumes"]["total"] = len(r.json().get("entries", []))
+
+        # === Performance (Summary) ===
+        # On tente de récupérer les métriques globales si disponibles
+        r = session.get(f"{base}/types/system/0?fields=currIops,currBandwidth,currLatency", timeout=10)
+        if r.status_code == 200:
+            p = r.json().get("content", {})
+            result["performance"] = {
+                "iops_total": round(p.get("currIops", 0), 0),
+                "bandwidth_mbps": round(p.get("currBandwidth", 0) / (1024**2), 2),
+                "latency_ms": round(p.get("currLatency", 0) / 1000, 2)
+            }
 
     except Exception as e:
         result["error"] = str(e)
