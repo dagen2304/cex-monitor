@@ -8,14 +8,16 @@ import concurrent.futures
 import logging
 from storage_collectors import unity_collector, powerstore_collector, datadomain_collector, dorado_collector
 
-def _build_array_list(prefix, count, env_prefix_ip, env_prefix_name):
+def _build_array_list(prefix, count, env_prefix_ip, env_prefix_name, global_user="", global_pwd=""):
     """Construit la liste des baies depuis les variables d'environnement."""
     arrays = []
     for i in range(1, count + 1):
         ip   = os.getenv(f"{env_prefix_ip}{i}_IP")
         name = os.getenv(f"{env_prefix_ip}{i}_NAME", f"{prefix}-{i}")
+        user = os.getenv(f"{env_prefix_ip}{i}_USER", global_user)
+        pwd = os.getenv(f"{env_prefix_ip}{i}_PASSWORD", global_pwd)
         if ip:
-            arrays.append({"name": name, "ip": ip})
+            arrays.append({"name": name, "ip": ip, "user": user, "pwd": pwd})
     return arrays
 
 def fetch_all_storage_stats():
@@ -37,17 +39,17 @@ def fetch_all_storage_stats():
     # Construction de la liste de toutes les baies avec leur collecteur
     tasks = []
 
-    for arr in _build_array_list("Unity", 8, "UNITY_", "UNITY_"):
-        tasks.append((unity_collector.collect, arr["ip"], arr["name"], unity_user, unity_pass))
+    for arr in _build_array_list("Unity", 50, "UNITY_", "UNITY_", unity_user, unity_pass):
+        tasks.append((unity_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
 
-    for arr in _build_array_list("PowerStore", 3, "POWERSTORE_", "POWERSTORE_"):
-        tasks.append((powerstore_collector.collect, arr["ip"], arr["name"], ps_user, ps_pass))
+    for arr in _build_array_list("PowerStore", 50, "POWERSTORE_", "POWERSTORE_", ps_user, ps_pass):
+        tasks.append((powerstore_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
 
-    for arr in _build_array_list("DataDomain", 3, "DD_", "DD_"):
-        tasks.append((datadomain_collector.collect, arr["ip"], arr["name"], dd_user, dd_pass))
+    for arr in _build_array_list("DataDomain", 50, "DD_", "DD_", dd_user, dd_pass):
+        tasks.append((datadomain_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
 
-    for arr in _build_array_list("Dorado", 2, "DORADO_", "DORADO_"):
-        tasks.append((dorado_collector.collect, arr["ip"], arr["name"], dorado_user, dorado_pass))
+    for arr in _build_array_list("Dorado", 50, "DORADO_", "DORADO_", dorado_user, dorado_pass):
+        tasks.append((dorado_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
 
     if not tasks:
         logging.warning("Aucune baie configurée dans .env")

@@ -2,7 +2,7 @@ from flask import Flask, render_template, jsonify, Response, stream_with_context
 import os
 import json
 import concurrent.futures
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 from vmware_health import fetch_vmware_stats
 from storage_health import fetch_all_storage_stats
 import logging
@@ -59,15 +59,19 @@ def api_vmware_stream():
     pwd = os.getenv("VC_PASSWORD")
 
     # Récupération dynamique des vCenters configurés
-    vcenters = [
-        {"name": os.getenv("VC1_NAME", "vCenter 1"), "ip": os.getenv("VC1_IP")},
-        {"name": os.getenv("VC2_NAME", "vCenter 2"), "ip": os.getenv("VC2_IP")},
-        {"name": os.getenv("VC3_NAME", "vCenter 3"), "ip": os.getenv("VC3_IP")},
-        {"name": os.getenv("VC4_NAME", "vCenter 4"), "ip": os.getenv("VC4_IP")},
-        {"name": os.getenv("VC5_NAME", "vCenter 5"), "ip": os.getenv("VC5_IP")},
-        {"name": os.getenv("VC6_NAME", "vCenter 6"), "ip": os.getenv("VC6_IP")},
-        {"name": os.getenv("VC7_NAME", "vCenter 7"), "ip": os.getenv("VC7_IP")},
-    ]
+    vcenters = []
+    for i in range(1, 51):
+        ip = os.getenv(f"VC{i}_IP")
+        if ip:
+            vc_user = os.getenv(f"VC{i}_USER", user)
+            vc_pwd = os.getenv(f"VC{i}_PASSWORD", pwd)
+            vcenters.append({
+                "name": os.getenv(f"VC{i}_NAME", f"vCenter {i}"), 
+                "ip": ip,
+                "user": vc_user,
+                "pwd": vc_pwd
+            })
+
     def fetch_vc(vc):
         if not vc.get("ip"): return None
         
@@ -77,7 +81,7 @@ def api_vmware_stream():
 
         logging.info(f"Tentative de connexion au vCenter {vc['name']} ({vc['ip']})")
         start_time = time.time()
-        vc_data = fetch_vmware_stats(vc["ip"], user, pwd)
+        vc_data = fetch_vmware_stats(vc["ip"], vc["user"], vc["pwd"])
         duration = round(time.time() - start_time, 2)
         
         result = {"vcenter": vc["name"], "ip": vc["ip"], "latency": duration}
@@ -238,6 +242,59 @@ def api_storage_test():
                     r["tcp_error"] = str(e)
             results.append(r)
     return jsonify(results)
+
+from flask import request
+
+@app.route('/api/config/add_device', methods=['POST'])
+def api_add_device():
+    data = request.json
+    device_type = data.get('type')
+    name = data.get('name')
+    ip = data.get('ip')
+    user = data.get('user')
+    pwd = data.get('pwd')
+    
+    if not device_type or not name or not ip:
+        return jsonify({"success": False, "error": "Champs manquants"}), 400
+        
+    env_file = ".env"
+    prefix = ""
+    if device_type == "vcenter":
+        prefix = "VC"
+    elif device_type == "unity":
+        prefix = "UNITY_"
+    elif device_type == "powerstore":
+        prefix = "POWERSTORE_"
+    elif device_type == "datadomain":
+        prefix = "DD_"
+    elif device_type == "dorado":
+        prefix = "DORADO_"
+    else:
+        return jsonify({"success": False, "error": "Type invalide"}), 400
+
+    # Find next available index
+    next_idx = 1
+    for i in range(1, 100):
+        if not os.getenv(f"{prefix}{i}_IP"):
+            next_idx = i
+            break
+
+    try:
+        # Append to .env safely
+        set_key(env_file, f"{prefix}{next_idx}_NAME", name)
+        set_key(env_file, f"{prefix}{next_idx}_IP", ip)
+        
+        if user:
+            set_key(env_file, f"{prefix}{next_idx}_USER", user)
+        if pwd:
+            set_key(env_file, f"{prefix}{next_idx}_PASSWORD", pwd)
+        
+        # Reload environment
+        load_dotenv(override=True)
+        return jsonify({"success": True, "message": f"Équipement ajouté à l'index {next_idx}"})
+    except Exception as e:
+        logging.error(f"Erreur lors de l'ajout d'équipement : {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/diagnostics')
 def api_diagnostics():

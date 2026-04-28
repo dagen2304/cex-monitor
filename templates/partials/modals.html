@@ -1,0 +1,128 @@
+    <!-- Modals / Overlays -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <h2 id="modal-title">Détails vCenter</h2>
+                    <p id="modal-subtitle">Hôtes et Machines Virtuelles</p>
+                </div>
+                <button class="btn-close" id="modal-close">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div class="modal-tabs">
+                    <button class="modal-tab active" data-tab="hosts">Hôtes (<span id="modal-host-count">0</span>)</button>
+                    <button class="modal-tab" data-tab="vms">VMs (<span id="modal-vm-count">0</span>)</button>
+                    <button class="modal-tab" data-tab="alerts">Alertes (<span id="modal-alert-count">0</span>)</button>
+                </div>
+                <div class="tab-content active" id="tab-hosts">
+                    <div class="modal-controls">
+                        <input type="text" class="search-input" id="search-modal-hosts" placeholder="Filtrer les hôtes...">
+                        <div class="export-group">
+                            <button class="btn-export" onclick="dashboard.exportModalData('hosts', 'csv')">CSV</button>
+                            <button class="btn-export" onclick="dashboard.exportModalData('hosts', 'xls')">XLS</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="premium-table sortable" id="table-modal-hosts">
+                            <thead>
+                                <tr>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 0)">Hôte</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 1)">Cluster</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 2)">CPU</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 3)">VMs</th>
+                                    <th onclick="dashboard.sortTable('table-modal-hosts', 4)">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-hosts-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-content" id="tab-vms">
+                    <div class="modal-controls">
+                        <input type="text" class="search-input" id="search-modal-vms" placeholder="Filtrer les VMs...">
+                        <div class="export-group">
+                            <button class="btn-export" onclick="dashboard.exportModalData('vms', 'csv')">CSV</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="premium-table sortable" id="table-modal-vms">
+                            <thead>
+                                <tr>
+                                    <th onclick="dashboard.sortTable('table-modal-vms', 0)">Nom</th>
+                                    <th onclick="dashboard.sortTable('table-modal-vms', 1)">État</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-vms-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-content" id="tab-alerts">
+                    <div id="modal-alerts-list" class="alerts-list">
+                        <p class="empty-state">Aucune alerte critique détectée.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Add Device -->
+    <div id="modal-add-device" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <h2>Ajouter un Équipement</h2>
+                    <p>Configuration dynamique et sécurisée</p>
+                </div>
+                <button class="btn-close" onclick="document.getElementById('modal-add-device').classList.remove('active')">&times;</button>
+            </header>
+            <div class="modal-body" style="padding-top: 15px;">
+                <form id="form-add-device" onsubmit="event.preventDefault(); dashboard.submitAddDevice();">
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 0.85rem; font-weight: 500;">Type d'Équipement <span style="color:var(--danger)">*</span></label>
+                            <select id="add-device-type" class="filter-select" style="width: 100%; height: 42px;" required>
+                                <option value="vcenter">VMware vCenter</option>
+                                <option value="unity">Dell EMC Unity</option>
+                                <option value="powerstore">Dell EMC PowerStore</option>
+                                <option value="datadomain">Dell EMC DataDomain</option>
+                                <option value="dorado">Huawei Dorado</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label style="display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 0.85rem; font-weight: 500;">Adresse IP / FQDN <span style="color:var(--danger)">*</span></label>
+                            <input type="text" id="add-device-ip" class="search-input" style="width: 100%; max-width: none; height: 42px;" placeholder="Ex: 10.0.0.50" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 30px;">
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 0.85rem; font-weight: 500;">Nom d'Affichage <span style="color:var(--danger)">*</span></label>
+                        <input type="text" id="add-device-name" class="search-input" style="width: 100%; max-width: none; height: 42px;" placeholder="Ex: vCenter-Dallas" required>
+                    </div>
+
+                    <div style="margin-bottom: 25px; padding: 15px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+                        <h4 style="margin-top: 0; margin-bottom: 15px; font-size: 0.95rem; color: var(--text-main);">Identifiants (Optionnel)</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px;">Laissez vide pour utiliser les accès globaux configurés dans le fichier .env.</p>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 0.8rem;">Utilisateur</label>
+                                <input type="text" id="add-device-user" class="search-input" style="width: 100%; max-width: none; height: 40px;" placeholder="admin">
+                            </div>
+                            <div class="form-group">
+                                <label style="display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 0.8rem;">Mot de passe</label>
+                                <input type="password" id="add-device-pwd" class="search-input" style="width: 100%; max-width: none; height: 40px;" placeholder="••••••••">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 16px; justify-content: flex-end; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+                        <button type="button" class="btn-export" onclick="document.getElementById('modal-add-device').classList.remove('active')" style="padding: 10px 20px;">Annuler</button>
+                        <button type="submit" class="btn-primary" id="btn-submit-device" style="padding: 10px 24px; font-weight: 500;">
+                            <span class="icon" style="margin-right: 8px;">+</span> Ajouter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>

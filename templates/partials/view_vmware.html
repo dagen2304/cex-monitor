@@ -1,0 +1,161 @@
+                <!-- VMware View -->
+                <div id="view-vmware" class="view-pane active">
+                    <section class="stats-grid">
+                        <div class="stat-card" id="card-total-vms">
+                            <div class="stat-icon blue">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                                    <line x1="6" y1="6" x2="6.01" y2="6"/>
+                                    <line x1="6" y1="18" x2="6.01" y2="18"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Total VMs</span>
+                                <h3 class="value" id="count-total">--</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 3l14 9-14 9V3z"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Actives</span>
+                                <h3 class="value green" id="count-on">--</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon red">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="6" y="4" width="4" height="16"/>
+                                    <rect x="14" y="4" width="4" height="16"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Éteintes</span>
+                                <h3 class="value red" id="count-off">--</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon yellow">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="10" y1="15" x2="10" y2="9"/>
+                                    <line x1="14" y1="15" x2="14" y2="9"/>
+                                </svg>
+                            </div>
+                            <div class="stat-info">
+                                <span class="label">Suspendues</span>
+                                <h3 class="value yellow" id="count-suspend">--</h3>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>vCenters</h3>
+                                <span class="badge" id="badge-vcenters">0 vCenters</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-vcenters" placeholder="Filtrer les vCenters...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('vcenters', 'csv')">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('vcenters', 'png')">PNG</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="vcenters-grid" id="vcenters-grid">
+                            <div class="empty-state">Collecte des vCenters...</div>
+                        </div>
+                    </section>
+
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Santé des Clusters</h3>
+                                <span class="badge" id="badge-clusters">0 clusters</span>
+                            </div>
+                            <div class="header-actions">
+                                <select class="filter-select" id="filter-clusters-vc">
+                                    <option value="all">Tous les vCenters</option>
+                                </select>
+                                <button class="btn-export" onclick="dashboard.exportData('view-vmware', 'png')">PNG</button>
+                            </div>
+                        </div>
+                        <div class="clusters-container" id="clusters-grid">
+                            <div class="empty-state">Chargement des données...</div>
+                        </div>
+                    </section>
+
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Inventaire Détaillé des Clusters</h3>
+                                <span class="badge" id="badge-clusters-detailed">0 clusters</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-clusters" placeholder="Rechercher un cluster...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('clusters-detailed', 'csv')" title="Exporter en CSV">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('clusters-detailed', 'xls')" title="Exporter en Excel">XLS</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('clusters-detailed', 'png')" title="Capture PNG">PNG</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-container" id="container-clusters-detailed">
+                            <table class="premium-table sortable" id="table-clusters-detailed">
+                                <thead>
+                                    <tr>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 0)">vCenter</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 1)">Cluster</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 2)">Hôtes (Total/Maint)</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 3)">Nombre de VMs</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 4)">DRS</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 5)">Usage Stockage</th>
+                                        <th onclick="dashboard.sortTable('table-clusters-detailed', 6)">Alarmes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clusters-detailed-body">
+                                    <tr><td colspan="7" class="text-center">En attente de données...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="data-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Vue Datastores</h3>
+                                <span class="badge" id="badge-datastores">0 datastores</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-datastores" placeholder="Rechercher un datastore...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('datastores', 'csv')">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('datastores', 'xls')">XLS</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('datastores', 'png')">PNG</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="premium-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nom</th>
+                                        <th>vCenter</th>
+                                        <th>Capacité</th>
+                                        <th>Utilisation</th>
+                                        <th>Libre</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="datastores-body">
+                                    <tr><td colspan="6" class="text-center">Initialisation...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>

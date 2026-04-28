@@ -1,0 +1,42 @@
+                <!-- Storage View -->
+                <div id="view-storage" class="view-pane">
+                    <div id="storage-container" class="storage-grid">
+                        <div class="empty-state">Démarrage de la collecte storage...</div>
+                    </div>
+
+                    <section class="data-panel" style="margin-top: 32px;">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Inventaire des Baies de Stockage</h3>
+                                <span class="badge" id="badge-storage-detailed">0 équipements</span>
+                            </div>
+                            <div class="header-actions">
+                                <input type="text" class="search-input" id="search-storage" placeholder="Rechercher une baie...">
+                                <div class="export-group">
+                                    <button class="btn-export" onclick="dashboard.exportData('storage-detailed', 'csv')">CSV</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('storage-detailed', 'xls')">XLS</button>
+                                    <button class="btn-export" onclick="dashboard.exportData('storage-detailed', 'png')">PNG</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="premium-table sortable" id="table-storage-detailed">
+                                <thead>
+                                    <tr>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 0)">TYPE</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 1)">Équipement</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 2)">IOPS</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 3)">Débit (MB/s)</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 4)">Latence (ms)</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 5)">Usage (%)</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 6)">État des disques</th>
+                                        <th onclick="dashboard.sortTable('table-storage-detailed', 7)">Action recommandée</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="storage-detailed-body">
+                                    <tr><td colspan="6" class="text-center">En attente de données...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>

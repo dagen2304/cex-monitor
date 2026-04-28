@@ -744,6 +744,52 @@ class Dashboard {
         document.getElementById('modal-overlay').classList.remove('active');
     }
 
+    openAddDeviceModal() {
+        document.getElementById('modal-add-device').classList.add('active');
+        document.getElementById('add-device-name').value = '';
+        document.getElementById('add-device-ip').value = '';
+    }
+
+    async submitAddDevice() {
+        const type = document.getElementById('add-device-type').value;
+        const name = document.getElementById('add-device-name').value;
+        const ip = document.getElementById('add-device-ip').value;
+        const user = document.getElementById('add-device-user').value;
+        const pwd = document.getElementById('add-device-pwd').value;
+        const btn = document.getElementById('btn-submit-device');
+
+        if (!type || !name || !ip) return;
+
+        btn.textContent = 'Ajout en cours...';
+        btn.disabled = true;
+
+        try {
+            const resp = await fetch('/api/config/add_device', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, name, ip, user, pwd })
+            });
+            const result = await resp.json();
+
+            if (result.success) {
+                this.showNotification('Équipement ajouté avec succès ! Redémarrage des flux...', 'success');
+                document.getElementById('modal-add-device').classList.remove('active');
+                
+                // Restart streams to pick up new device
+                setTimeout(() => {
+                    this.refreshData();
+                }, 1000);
+            } else {
+                this.showNotification(`Erreur: ${result.error}`, 'error');
+            }
+        } catch (e) {
+            this.showNotification(`Erreur de connexion: ${e.message}`, 'error');
+        } finally {
+            btn.textContent = 'Ajouter';
+            btn.disabled = false;
+        }
+    }
+
     switchModalTab(tabId) {
         document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
