@@ -6,7 +6,7 @@ Retourne un GÉNÉRATEUR : chaque résultat est émis dès qu'il arrive (pas en 
 import os
 import concurrent.futures
 import logging
-from storage_collectors import unity_collector, powerstore_collector, datadomain_collector, dorado_collector
+from storage_collectors import unity_collector, powerstore_collector, datadomain_collector, dorado_collector, scality_collector
 
 def _build_array_list(prefix, count, env_prefix_ip, env_prefix_name, global_user="", global_pwd=""):
     """Construit la liste des baies depuis les variables d'environnement."""
@@ -35,6 +35,8 @@ def fetch_all_storage_stats():
     dd_pass      = os.getenv("DD_PASSWORD",      "")
     dorado_user  = os.getenv("DORADO_USER",      "")
     dorado_pass  = os.getenv("DORADO_PASSWORD",  "")
+    scality_user = os.getenv("SCALITY_USER",     "")
+    scality_pass = os.getenv("SCALITY_PASSWORD", "")
 
     # Construction de la liste de toutes les baies avec leur collecteur
     tasks = []
@@ -50,6 +52,9 @@ def fetch_all_storage_stats():
 
     for arr in _build_array_list("Dorado", 50, "DORADO_", "DORADO_", dorado_user, dorado_pass):
         tasks.append((dorado_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
+
+    for arr in _build_array_list("Scality", 50, "SCALITY_", "SCALITY_", scality_user, scality_pass):
+        tasks.append((scality_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
 
     if not tasks:
         logging.warning("Aucune baie configurée dans .env")

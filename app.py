@@ -269,6 +269,8 @@ def api_add_device():
         prefix = "DD_"
     elif device_type == "dorado":
         prefix = "DORADO_"
+    elif device_type == "scality":
+        prefix = "SCALITY_"
     else:
         return jsonify({"success": False, "error": "Type invalide"}), 400
 
