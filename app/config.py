@@ -9,6 +9,10 @@ class Config:
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
     LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
     
+    # Database
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///capacity.db'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
     @staticmethod
     def get_vcenter_user():
         return os.getenv("VC_USER")

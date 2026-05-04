@@ -8,6 +8,7 @@ class Dashboard {
         this.views = {
             vmware: document.getElementById('view-vmware'),
             storage: document.getElementById('view-storage'),
+            capacity: document.getElementById('view-capacity'),
             alerts: document.getElementById('view-alerts'),
             diagnostics: document.getElementById('view-diagnostics')
         };
@@ -165,26 +166,86 @@ class Dashboard {
     switchView(viewName) {
         // Update Nav
         this.navLinks.forEach(l => l.classList.remove('active'));
-        document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
+        const activeLink = document.querySelector(`[data-view="${viewName}"]`);
+        if (activeLink) activeLink.classList.add('active');
 
         // Update Views
         Object.keys(this.views).forEach(v => {
-            this.views[v].classList.remove('active');
+            if (this.views[v]) this.views[v].classList.remove('active');
         });
-        this.views[viewName].classList.add('active');
+        if (this.views[viewName]) this.views[viewName].classList.add('active');
 
         // Update Header
         const titles = {
             vmware: { title: 'VMware vSphere', sub: 'Supervision Multi-vCenter' },
             storage: { title: 'Baies de Stockage', sub: 'Performance & Capacité SAN/NAS' },
+            capacity: { title: 'Capacité & Tendances', sub: 'Analyse Week-to-Week et Month-on-Month' },
             alerts: { title: 'Alertes Globales', sub: 'Synthèse des incidents critiques' },
             diagnostics: { title: 'Diagnostics API', sub: 'État du cache et du monitoring' }
         };
-        document.getElementById('current-view-title').textContent = titles[viewName].title;
-        document.getElementById('current-view-subtitle').textContent = titles[viewName].sub;
+        
+        if (titles[viewName]) {
+            document.getElementById('current-view-title').textContent = titles[viewName].title;
+            document.getElementById('current-view-subtitle').textContent = titles[viewName].sub;
+        }
 
         if (viewName === 'diagnostics') this.fetchDiagnostics();
         if (viewName === 'alerts') this.renderGlobalAlerts();
+        if (viewName === 'capacity') this.fetchCapacityReport();
+        
+        this.currentView = viewName;
+    }
+
+    async fetchCapacityReport() {
+        const body = document.getElementById('capacity-report-body');
+        body.innerHTML = '<tr><td colspan="6" class="text-center">Calcul des tendances...</td></tr>';
+        
+        try {
+            const resp = await fetch('/api/capacity/report');
+            const data = await resp.json();
+            
+            if (data.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="text-center">Aucun historique disponible pour le moment.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = '';
+            let totalW2W = 0, countW2W = 0;
+            let totalMoM = 0, countMoM = 0;
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                const w2wClass = item.w2w_delta > 0 ? 'text-danger' : (item.w2w_delta < 0 ? 'text-success' : '');
+                const momClass = item.mom_delta > 0 ? 'text-danger' : (item.mom_delta < 0 ? 'text-success' : '');
+                
+                const w2wVal = item.w2w_delta !== null ? (item.w2w_delta > 0 ? '+' : '') + item.w2w_delta + '%' : '--';
+                const momVal = item.mom_delta !== null ? (item.mom_delta > 0 ? '+' : '') + item.mom_delta + '%' : '--';
+                
+                if (item.w2w_delta !== null) { totalW2W += item.w2w_delta; countW2W++; }
+                if (item.mom_delta !== null) { totalMoM += item.mom_delta; countMoM++; }
+
+                row.innerHTML = `
+                    <td><strong>${item.device_name}</strong> <span class="text-xs text-muted">(${item.device_type})</span></td>
+                    <td><code class="text-xs">${item.metric}</code></td>
+                    <td class="text-center font-mono">${item.current}%</td>
+                    <td class="text-center font-mono ${w2wClass}">${w2wVal}</td>
+                    <td class="text-center font-mono ${momClass}">${momVal}</td>
+                    <td>
+                        ${item.w2w_delta > 2 ? '<span class="badge danger">SATURE</span>' : 
+                          (item.w2w_delta > 0 ? '<span class="badge warning">AUGMENTE</span>' : '<span class="badge success">STABLE</span>')}
+                    </td>
+                `;
+                body.appendChild(row);
+            });
+
+            // Update Summaries
+            document.getElementById('capacity-summary-w2w').textContent = countW2W > 0 ? (Math.round(totalW2W/countW2W*10)/10) + '%' : '--';
+            document.getElementById('capacity-summary-mom').textContent = countMoM > 0 ? (Math.round(totalMoM/countMoM*10)/10) + '%' : '--';
+            document.getElementById('capacity-last-run').textContent = new Date().toLocaleTimeString();
+
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Erreur: ${e.message}</td></tr>`;
+        }
     }
 
     startClock() {

@@ -59,6 +59,14 @@
 
                 <div class="nav-group">
                     <span class="group-title">Système</span>
+                    <button class="nav-link" data-view="capacity" id="btn-capacity">
+                        <span class="icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.21 15.89A10 10 0 118 2.83M22 12A10 10 0 0012 2v10z"/>
+                            </svg>
+                        </span> 
+                        <span>Capacité</span>
+                    </button>
                     <button class="nav-link" data-view="alerts" id="btn-alerts">
                         <span class="icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -130,6 +138,7 @@
             <div class="content-scroll">
                 {% include 'partials/view_vmware.html' %}
                 {% include 'partials/view_storage.html' %}
+                {% include 'partials/view_capacity.html' %}
                 {% include 'partials/view_alerts.html' %}
                 {% include 'partials/view_diagnostics.html' %}
             </div>

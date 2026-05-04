@@ -3,3 +3,6 @@ python-dotenv
 requests
 pyvmomi
 urllib3
+
+Flask-SQLAlchemy
+APScheduler

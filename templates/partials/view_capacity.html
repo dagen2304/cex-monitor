@@ -1,0 +1,53 @@
+<!-- Capacity View -->
+<div id="view-capacity" class="view-pane">
+    <div class="alerts-summary-grid">
+        <div class="alert-summary-card blue">
+            <span class="lbl">Tendance W2W</span>
+            <h3 id="capacity-summary-w2w">--</h3>
+        </div>
+        <div class="alert-summary-card accent">
+            <span class="lbl">Tendance MoM</span>
+            <h3 id="capacity-summary-mom">--</h3>
+        </div>
+        <div class="alert-summary-card">
+            <span class="lbl">Dernière Capture</span>
+            <h3 id="capacity-last-run" style="font-size: 1.2rem;">Attente...</h3>
+        </div>
+    </div>
+
+    <section class="data-panel" style="margin-top: 24px;">
+        <div class="panel-header">
+            <div class="header-left">
+                <h3>Rapport de Saturation Capacitaire</h3>
+                <span class="badge">Week-to-Week & Month-on-Month</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn-export" onclick="dashboard.fetchCapacityReport()">Rafraîchir Rapport</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="premium-table" id="table-capacity-report">
+                <thead>
+                    <tr>
+                        <th>Équipement</th>
+                        <th>Métrique</th>
+                        <th class="text-center">Usage Actuel</th>
+                        <th class="text-center">Delta W2W</th>
+                        <th class="text-center">Delta MoM</th>
+                        <th>Status Tendance</th>
+                    </tr>
+                </thead>
+                <tbody id="capacity-report-body">
+                    <tr><td colspan="6" class="text-center">Initialisation du rapport...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    
+    <div class="info-note" style="margin-top:20px; padding:16px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:0.85rem; color:var(--text-muted);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:8px;">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        Note: Les deltas sont calculés par rapport à la capture de référence la plus proche des 7 et 30 derniers jours. Une capture automatique est effectuée chaque jour à minuit.
+    </div>
+</div>
