@@ -1,26 +1,50 @@
                 <!-- Alerts View -->
                 <div id="view-alerts" class="view-pane">
-                    <section class="data-panel">
+                    <div class="alerts-summary-grid">
+                        <div class="alert-summary-card red">
+                            <span class="lbl">Critiques</span>
+                            <h3 id="alert-summary-critical">0</h3>
+                        </div>
+                        <div class="alert-summary-card yellow">
+                            <span class="lbl">Warnings</span>
+                            <h3 id="alert-summary-warning">0</h3>
+                        </div>
+                        <div class="alert-summary-card blue">
+                            <span class="lbl">Infos</span>
+                            <h3 id="alert-summary-info">0</h3>
+                        </div>
+                    </div>
+
+                    <section class="data-panel" style="margin-top: 24px;">
                         <div class="panel-header">
                             <div class="header-left">
-                                <h3>Journal des Alertes Critiques</h3>
+                                <h3>Journal des Alertes Centralisé</h3>
                                 <span class="badge" id="badge-total-alerts">0 alertes</span>
+                            </div>
+                            <div class="header-actions">
+                                <select class="filter-select" id="filter-alerts-severity">
+                                    <option value="all">Toutes Sévérités</option>
+                                    <option value="CRITICAL">Critique</option>
+                                    <option value="WARNING">Warning</option>
+                                    <option value="INFO">Info</option>
+                                </select>
+                                <input type="text" class="search-input" id="search-alerts" placeholder="Filtrer par message ou source...">
                             </div>
                         </div>
                         <div class="table-container">
                             <table class="premium-table sortable" id="table-global-alerts">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
-                                        <th>Source</th>
-                                        <th>Composant</th>
-                                        <th>Sévérité</th>
-                                        <th>Message</th>
-                                        <th>Date détectée</th>
+                                        <th style="width: 80px;">ID</th>
+                                        <th style="width: 150px;">Source</th>
+                                        <th style="width: 120px;">Composant</th>
+                                        <th style="width: 100px;">Sévérité</th>
+                                        <th>Message d'incident</th>
+                                        <th style="width: 180px;">Date détectée</th>
                                     </tr>
                                 </thead>
                                 <tbody id="global-alerts-body">
-                                    <tr><td colspan="4" class="text-center">Aucune alerte en cours.</td></tr>
+                                    <tr><td colspan="6" class="text-center">Initialisation du journal...</td></tr>
                                 </tbody>
                             </table>
                         </div>

@@ -25,10 +25,13 @@ class Dashboard {
                 total: 0, on: 0, off: 0, suspend: 0, 
                 clusters: [], datastores: [], vcenters: [] 
             },
-            storage: []
+            storage: [],
+            globalAlerts: [],
+            history: {} // Store [timestamp, cpu, ram] per VC
         };
 
         this.vcenterFilters = new Set();
+        this.currentView = 'vmware';
         this.init();
     }
 
@@ -37,6 +40,7 @@ class Dashboard {
         this.startClock();
         this.startVMwareStream();
         this.startStorageStream();
+        this.setupGlobalShortcuts();
     }
 
     setupEventListeners() {
@@ -48,8 +52,23 @@ class Dashboard {
             });
         });
 
-        // Event Listeners for Search
-        document.getElementById('search-vcenters').addEventListener('input', (e) => this.filterVCenters(e.target.value));
+        // VMware Internal Tabs
+        document.querySelectorAll('.view-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.getAttribute('data-tab');
+                this.switchInternalTab(tab, target);
+            });
+        });
+
+        // Global Search
+        const globalSearch = document.getElementById('global-search');
+        globalSearch.addEventListener('input', (e) => this.handleGlobalSearch(e.target.value));
+
+        // Alerts Filtering
+        document.getElementById('filter-alerts-severity').addEventListener('change', () => this.renderGlobalAlerts());
+        document.getElementById('search-alerts').addEventListener('input', () => this.renderGlobalAlerts());
+
+        // VMware Filters (Inside Tabs)
         document.getElementById('search-clusters').addEventListener('input', (e) => this.filterTable('clusters-detailed-body', e.target.value));
         document.getElementById('search-datastores').addEventListener('input', (e) => this.filterTable('datastores-body', e.target.value));
         
@@ -84,6 +103,63 @@ class Dashboard {
                 this.switchModalTab(target);
             });
         });
+    }
+
+    setupGlobalShortcuts() {
+        window.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+                e.preventDefault();
+                document.getElementById('global-search').focus();
+            }
+        });
+    }
+
+    switchInternalTab(tabElement, targetId) {
+        // Update Buttons
+        const parent = tabElement.parentElement;
+        parent.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+        tabElement.classList.add('active');
+
+        // Update Contents
+        const container = parent.parentElement;
+        container.querySelectorAll('.view-tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(`tab-${targetId}`).classList.add('active');
+    }
+
+    handleGlobalSearch(query) {
+        const q = query.toLowerCase();
+        if (!q) {
+            this.resetAllFilters();
+            return;
+        }
+
+        // Search vCenters
+        this.filterVCenters(q);
+        
+        // Search Clusters
+        this.filterTable('clusters-detailed-body', q);
+        this.filterClustersCards(q);
+        
+        // Search Storage
+        this.filterTable('storage-detailed-body', q);
+        this.filterStorageCards(q);
+
+        // Search Datastores
+        this.filterTable('datastores-body', q);
+    }
+
+    filterClustersCards(q) {
+        const cards = document.querySelectorAll('.cluster-card');
+        cards.forEach(card => card.style.display = card.innerText.toLowerCase().includes(q) ? '' : 'none');
+    }
+
+    filterStorageCards(q) {
+        const cards = document.querySelectorAll('.array-card');
+        cards.forEach(card => card.style.display = card.innerText.toLowerCase().includes(q) ? '' : 'none');
+    }
+
+    resetAllFilters() {
+        document.querySelectorAll('.vc-card, .cluster-card, .array-card, tr').forEach(el => el.style.display = '');
     }
 
     switchView(viewName) {
@@ -189,6 +265,7 @@ class Dashboard {
             this.data.vmware.off += data.vms.off;
             this.data.vmware.suspend += data.vms.suspend;
             this.updateVMwareCounters();
+            this.updateSidebarStats();
 
             // Handle Global Alerts from vCenter
             if (data.error) {
@@ -250,6 +327,7 @@ class Dashboard {
 
         this.renderArrayCard(data);
         this.renderDetailedStorage(data);
+        this.renderHeatmapSquare(data);
 
         // Handle Global Alerts from Storage
         if (data.state === 'DOWN' || data.error) {
@@ -517,30 +595,73 @@ class Dashboard {
 
     renderGlobalAlerts() {
         const body = document.getElementById('global-alerts-body');
+        const severityFilter = document.getElementById('filter-alerts-severity').value;
+        const searchQuery = document.getElementById('search-alerts').value.toLowerCase();
+
         if (!this.data.globalAlerts || this.data.globalAlerts.length === 0) {
             body.innerHTML = '<tr><td colspan="7" class="text-center">Aucune alerte en cours.</td></tr>';
+            this.updateAlertSummary(0, 0, 0);
             return;
         }
 
-        body.innerHTML = '';
-        // Trier par date décroissante
-        const sorted = [...this.data.globalAlerts].sort((a, b) => b.timestamp - a.timestamp);
+        let filtered = this.data.globalAlerts;
         
+        if (severityFilter !== 'all') {
+            filtered = filtered.filter(a => a.severity === severityFilter);
+        }
+        
+        if (searchQuery) {
+            filtered = filtered.filter(a => 
+                a.message.toLowerCase().includes(searchQuery) || 
+                a.source.toLowerCase().includes(searchQuery) ||
+                a.component.toLowerCase().includes(searchQuery)
+            );
+        }
+
+        // Count totals for summary
+        const criticals = this.data.globalAlerts.filter(a => ['CRITICAL', 'ERROR', 'MAJOR', 'Red'].includes(a.severity)).length;
+        const warnings = this.data.globalAlerts.filter(a => ['WARNING', 'MINOR', 'Yellow'].includes(a.severity)).length;
+        const infos = this.data.globalAlerts.length - criticals - warnings;
+        this.updateAlertSummary(criticals, warnings, infos);
+
+        body.innerHTML = '';
+        const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+        
+        if (sorted.length === 0) {
+            body.innerHTML = '<tr><td colspan="6" class="text-center">Aucune alerte ne correspond aux filtres.</td></tr>';
+            return;
+        }
+
         sorted.forEach(a => {
             const row = document.createElement('tr');
-            const sev = a.severity.toLowerCase();
-            const badgeClass = (sev === 'critical' || sev === 'error' || sev === 'major') ? 'danger' : 'warning';
+            const sev = a.severity.toUpperCase();
+            let badgeClass = 'badge';
+            if (['CRITICAL', 'ERROR', 'MAJOR', 'Red'].includes(sev)) badgeClass += ' danger';
+            else if (['WARNING', 'MINOR', 'Yellow'].includes(sev)) badgeClass += ' warning';
+            else badgeClass += ' blue';
             
             row.innerHTML = `
-                <td><code class="text-xs">${a.id}</code></td>
+                <td><code class="text-xs">${a.id.substring(0,8)}</code></td>
                 <td><strong>${a.source}</strong></td>
                 <td><span class="vc-tag" style="background:rgba(255,255,255,0.05);">${a.component}</span></td>
-                <td><span class="badge ${badgeClass}">${a.severity}</span></td>
+                <td><span class="${badgeClass}">${sev}</span></td>
                 <td style="max-width:400px; white-space: normal; line-height:1.4;">${a.message}</td>
                 <td class="font-mono text-xs">${a.timestamp.toLocaleString()}</td>
             `;
             body.appendChild(row);
         });
+    }
+
+    updateAlertSummary(crit, warn, info) {
+        document.getElementById('alert-summary-critical').textContent = crit;
+        document.getElementById('alert-summary-warning').textContent = warn;
+        document.getElementById('alert-summary-info').textContent = info;
+        
+        const sidebarAlertCount = document.getElementById('sidebar-alert-count');
+        if (sidebarAlertCount) {
+            sidebarAlertCount.textContent = crit;
+            sidebarAlertCount.className = crit > 0 ? 'val red' : 'val';
+        }
     }
 
     async fetchDiagnostics() {
@@ -610,6 +731,18 @@ class Dashboard {
         
         const vmOn = vc.vms ? vc.vms.on : 0;
         const vmOff = vc.vms ? vc.vms.off : 0;
+        
+        const cpu = vc.global_metrics ? vc.global_metrics.cpu : 0;
+        const ram = vc.global_metrics ? vc.global_metrics.ram : 0;
+
+        // Update History for Trends
+        if (!this.data.history[vc.vcenter]) this.data.history[vc.vcenter] = { cpu: [], ram: [] };
+        this.data.history[vc.vcenter].cpu.push(cpu);
+        this.data.history[vc.vcenter].ram.push(ram);
+        if (this.data.history[vc.vcenter].cpu.length > 15) {
+            this.data.history[vc.vcenter].cpu.shift();
+            this.data.history[vc.vcenter].ram.shift();
+        }
 
         card.innerHTML = `
             <div class="vc-card-glow"></div>
@@ -645,19 +778,21 @@ class Dashboard {
                 <div class="resource-row">
                     <div class="resource-label">
                         <span>CPU Global</span>
-                        <span>${vc.global_metrics ? vc.global_metrics.cpu : 0}%</span>
+                        <div class="trend-container" id="trend-cpu-${cardId}"></div>
+                        <span>${cpu}%</span>
                     </div>
                     <div class="progress-track">
-                        <div class="progress-fill fill-cpu" style="width: ${vc.global_metrics ? vc.global_metrics.cpu : 0}%"></div>
+                        <div class="progress-fill fill-cpu" style="width: ${cpu}%"></div>
                     </div>
                 </div>
                 <div class="resource-row">
                     <div class="resource-label">
                         <span>RAM Globale</span>
-                        <span>${vc.global_metrics ? vc.global_metrics.ram : 0}%</span>
+                        <div class="trend-container" id="trend-ram-${cardId}"></div>
+                        <span>${ram}%</span>
                     </div>
                     <div class="progress-track">
-                        <div class="progress-fill fill-ram" style="width: ${vc.global_metrics ? vc.global_metrics.ram : 0}%"></div>
+                        <div class="progress-fill fill-ram" style="width: ${ram}%"></div>
                     </div>
                 </div>
             </div>
@@ -669,7 +804,27 @@ class Dashboard {
             </div>
         `;
 
+        this.drawTrend(`trend-cpu-${cardId}`, this.data.history[vc.vcenter].cpu);
+        this.drawTrend(`trend-ram-${cardId}`, this.data.history[vc.vcenter].ram);
+
         card.onclick = () => this.openModal(vc);
+    }
+
+    drawTrend(containerId, values) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const max = 100;
+        values.forEach(v => {
+            const bar = document.createElement('div');
+            bar.className = 'trend-bar';
+            const height = Math.max(2, (v / max) * 100);
+            bar.style.height = `${height}%`;
+            if (v > 90) bar.style.background = 'var(--danger)';
+            else if (v > 75) bar.style.background = 'var(--warning)';
+            container.appendChild(bar);
+        });
     }
 
     filterVCenters(query) {
@@ -953,6 +1108,63 @@ class Dashboard {
             XLSX.utils.book_append_sheet(wb, ws, "Data");
             XLSX.writeFile(wb, `${filename}.xlsx`);
         }
+    }
+
+    updateSidebarStats() {
+        const cpuAvg = document.getElementById('sidebar-cpu-avg');
+        const alertCount = document.getElementById('sidebar-alert-count');
+        
+        // Calculate average CPU across all vCenters in data
+        let totalCpu = 0;
+        let count = 0;
+        // This assumes we have access to the full data state, 
+        // for now we can scrape from the UI or use a class property
+        const cpuElements = document.querySelectorAll('.vc-resource-usage .resource-row:first-child span:last-child');
+        cpuElements.forEach(el => {
+            totalCpu += parseFloat(el.textContent);
+            count++;
+        });
+        
+        if (count > 0) cpuAvg.textContent = Math.round(totalCpu / count) + '%';
+        
+        const totalAlerts = this.data.globalAlerts ? this.data.globalAlerts.length : 0;
+        alertCount.textContent = totalAlerts;
+        alertCount.className = totalAlerts > 0 ? 'val red' : 'val';
+    }
+
+    renderHeatmapSquare(data) {
+        const heatmap = document.getElementById('storage-heatmap');
+        if (heatmap.querySelector('.empty-state')) heatmap.innerHTML = '';
+
+        const squareId = `heatmap-sq-${data.name}`.replace(/\s+/g, '-');
+        let square = document.getElementById(squareId);
+        if (!square) {
+            square = document.createElement('div');
+            square.id = squareId;
+            square.className = 'heatmap-square';
+            heatmap.appendChild(square);
+        }
+
+        const usagePct = data.capacity ? data.capacity.used_pct : 0;
+        const statusClass = data.state === 'DOWN' ? 'gray' : (usagePct > 90 ? 'red' : (usagePct > 75 ? 'yellow' : 'green'));
+        
+        square.className = `heatmap-square ${statusClass}`;
+        // Show short name or index inside square
+        const shortName = data.name.substring(0, 3).toUpperCase();
+        square.innerHTML = `
+            ${shortName}
+            <div class="tooltip">
+                <strong>${data.name}</strong><br>
+                IP: ${data.ip}<br>
+                Usage: ${usagePct}%<br>
+                Status: ${data.state}
+            </div>
+        `;
+
+        square.onclick = () => {
+            const card = document.getElementById(`storage-card-${data.name}`.replace(/\s+/g, '-'));
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
     }
 
     showNotification(msg, type = 'info') {

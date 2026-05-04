@@ -6,7 +6,7 @@ Retourne un GÉNÉRATEUR : chaque résultat est émis dès qu'il arrive (pas en 
 import os
 import concurrent.futures
 import logging
-from storage_collectors import unity_collector, powerstore_collector, datadomain_collector, dorado_collector, scality_collector
+from .storage_collectors import COLLECTOR_REGISTRY
 
 def _build_array_list(prefix, count, env_prefix_ip, env_prefix_name, global_user="", global_pwd=""):
     """Construit la liste des baies depuis les variables d'environnement."""
@@ -26,35 +26,17 @@ def fetch_all_storage_stats():
     GÉNÉRATEUR : yield chaque résultat dès qu'il est disponible.
     Permet un streaming SSE immédiat sans attendre toutes les baies.
     """
-    # Credentials par constructeur
-    unity_user   = os.getenv("UNITY_USER",       "")
-    unity_pass   = os.getenv("UNITY_PASSWORD",   "")
-    ps_user      = os.getenv("POWERSTORE_USER",  "")
-    ps_pass      = os.getenv("POWERSTORE_PASSWORD", "")
-    dd_user      = os.getenv("DD_USER",          "")
-    dd_pass      = os.getenv("DD_PASSWORD",      "")
-    dorado_user  = os.getenv("DORADO_USER",      "")
-    dorado_pass  = os.getenv("DORADO_PASSWORD",  "")
-    scality_user = os.getenv("SCALITY_USER",     "")
-    scality_pass = os.getenv("SCALITY_PASSWORD", "")
-
-    # Construction de la liste de toutes les baies avec leur collecteur
     tasks = []
 
-    for arr in _build_array_list("Unity", 50, "UNITY_", "UNITY_", unity_user, unity_pass):
-        tasks.append((unity_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
-
-    for arr in _build_array_list("PowerStore", 50, "POWERSTORE_", "POWERSTORE_", ps_user, ps_pass):
-        tasks.append((powerstore_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
-
-    for arr in _build_array_list("DataDomain", 50, "DD_", "DD_", dd_user, dd_pass):
-        tasks.append((datadomain_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
-
-    for arr in _build_array_list("Dorado", 50, "DORADO_", "DORADO_", dorado_user, dorado_pass):
-        tasks.append((dorado_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
-
-    for arr in _build_array_list("Scality", 50, "SCALITY_", "SCALITY_", scality_user, scality_pass):
-        tasks.append((scality_collector.collect, arr["ip"], arr["name"], arr["user"], arr["pwd"]))
+    for type_name, config in COLLECTOR_REGISTRY.items():
+        global_user = os.getenv(config["user_env"], "")
+        global_pwd = os.getenv(config["pwd_env"], "")
+        
+        arrays = _build_array_list(
+            type_name, 50, config["prefix"], config["prefix"], global_user, global_pwd
+        )
+        for arr in arrays:
+            tasks.append((config["fn"], arr["ip"], arr["name"], arr["user"], arr["pwd"]))
 
     if not tasks:
         logging.warning("Aucune baie configurée dans .env")

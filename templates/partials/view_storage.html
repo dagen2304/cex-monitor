@@ -1,5 +1,24 @@
                 <!-- Storage View -->
                 <div id="view-storage" class="view-pane">
+                    <section class="data-panel heatmap-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <h3>Health Map Stockage</h3>
+                                <span class="badge">État Global</span>
+                            </div>
+                            <div class="heatmap-legend">
+                                <div class="legend-item"><span class="dot green"></span> OK</div>
+                                <div class="legend-item"><span class="dot yellow"></span> Attention (>75%)</div>
+                                <div class="legend-item"><span class="dot red"></span> Critique (>90%)</div>
+                                <div class="legend-item"><span class="dot gray"></span> Hors-ligne</div>
+                            </div>
+                        </div>
+                        <div class="storage-heatmap" id="storage-heatmap">
+                            <!-- Squares will be injected here -->
+                            <div class="empty-state">Initialisation de la carte...</div>
+                        </div>
+                    </section>
+
                     <div id="storage-container" class="storage-grid">
                         <div class="empty-state">Démarrage de la collecte storage...</div>
                     </div>
