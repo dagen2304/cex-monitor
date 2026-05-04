@@ -1,0 +1,58 @@
+<section id="view-inventory" class="dashboard-view">
+    <div class="view-header" style="margin-bottom: 30px;">
+        <div class="header-main">
+            <h2 class="view-title">Inventaire des Équipements</h2>
+            <p class="view-subtitle">Gestion centralisée en base de données (CRUD)</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-primary" onclick="dashboard.openAddDeviceModal()" style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Ajouter un équipement
+            </button>
+        </div>
+    </div>
+
+    <div class="glass-panel" style="padding: 0; overflow: hidden;">
+        <div class="panel-header" style="padding: 20px 25px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <h3 style="font-size: 1rem; margin: 0; color: var(--text-main);">Liste des Équipements <span id="badge-inventory-count" class="badge-count">0</span></h3>
+                <div class="search-box">
+                    <input type="text" id="search-inventory" class="search-input" placeholder="Rechercher par nom, IP, type..." style="width: 300px; height: 38px;">
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <select id="filter-inventory-type" class="filter-select" style="height: 38px;">
+                    <option value="all">Tous les types</option>
+                    <option value="vcenter">vCenter</option>
+                    <option value="unity">Unity</option>
+                    <option value="powerstore">PowerStore</option>
+                    <option value="datadomain">DataDomain</option>
+                    <option value="dorado">Dorado</option>
+                    <option value="scality">Scality</option>
+                </select>
+                <button class="btn-export" onclick="dashboard.loadInventory()" style="height: 38px; display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    Actualiser
+                </button>
+            </div>
+        </div>
+        <div class="table-container" style="max-height: calc(100vh - 350px);">
+            <table class="premium-table sortable" id="table-inventory">
+                <thead>
+                    <tr>
+                        <th onclick="dashboard.sortTable('table-inventory', 0)" style="width: 120px;">Type</th>
+                        <th onclick="dashboard.sortTable('table-inventory', 1)">Nom</th>
+                        <th onclick="dashboard.sortTable('table-inventory', 2)">Adresse IP</th>
+                        <th onclick="dashboard.sortTable('table-inventory', 3)">Utilisateur</th>
+                        <th onclick="dashboard.sortTable('table-inventory', 4)" style="width: 80px;">Port</th>
+                        <th onclick="dashboard.sortTable('table-inventory', 5)">Mode</th>
+                        <th style="width: 120px; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-body">
+                    <tr><td colspan="7" class="text-center">Chargement de l'inventaire...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

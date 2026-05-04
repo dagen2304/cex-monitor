@@ -4,7 +4,10 @@ Collecteur Scality Ring — Supervisor API v0.1
 import requests
 import urllib3
 import logging
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from app.config import Config
+
+if not Config.VERIFY_SSL:
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _empty_result(name, ip):
     return {
@@ -17,7 +20,7 @@ def _empty_result(name, ip):
         "volumes": {"total": 0}
     }
 
-def collect(ip, name, user, password):
+def collect(ip, name, user, password, port=443, extra_params=None):
     """
     Collects metrics from Scality RING via Supervisor API v0.1.
     Targeting the /api/v0.1/rings endpoint.
@@ -25,21 +28,30 @@ def collect(ip, name, user, password):
     result = _empty_result(name, ip)
     
     session = requests.Session()
-    session.verify = False
     
+    session.verify = Config.VERIFY_SSL
+    if Config.CA_BUNDLE and Config.VERIFY_SSL:
+        session.verify = Config.CA_BUNDLE
+
     if user and password:
         session.auth = (user, password)
         
+    port = port or 443
+    if port == 443:
+        host_port = ip
+    else:
+        host_port = f"{ip}:{port}"
+        
     try:
         # 1. Get Supervisor Status / Version
-        url_status = f"https://{ip}/api/v0.1/status"
+        url_status = f"https://{host_port}/api/v0.1/status"
         r_status = session.get(url_status, timeout=10)
         if r_status.status_code == 200:
             status_data = r_status.json()
             result["firmware"] = f"RING {status_data.get('supapi_version', 'N/A')}"
             
         # 2. Get Rings Data
-        url_rings = f"https://{ip}/api/v0.1/rings"
+        url_rings = f"https://{host_port}/api/v0.1/rings"
         r_rings = session.get(url_rings, timeout=10)
         
         if r_rings.status_code == 200:

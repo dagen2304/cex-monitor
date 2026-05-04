@@ -4,7 +4,11 @@ Gère plusieurs versions OE Unity (4.x et 5.x+)
 """
 import requests
 import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from app.config import Config
+
+# On ne désactive les warnings que si l'utilisateur l'a explicitement demandé via VERIFY_SSL=False
+if not Config.VERIFY_SSL:
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 HEALTH_MAP = {5: "OK", 10: "DEGRADED", 15: "MINOR", 20: "MAJOR", 25: "CRITICAL"}
 SEV_MAP = {1: "INFO", 2: "INFO", 4: "INFO", 8: "WARNING", 16: "ERROR", 32: "ERROR", 64: "CRITICAL", 128: "CRITICAL"}
@@ -24,14 +28,23 @@ def _empty_result(name, ip):
         "volumes": {"total": 0}
     }
 
-def _setup_session(ip, user, password):
-    base = f"https://{ip}/api"
+def _setup_session(ip, user, password, port=443):
+    port = port or 443
+    if port == 443:
+        host_port = ip
+    else:
+        host_port = f"{ip}:{port}"
+        
+    base = f"https://{host_port}/api"
     for endpoint in LOGIN_ENDPOINTS:
         session = requests.Session()
-        session.verify = False
+        session.verify = Config.VERIFY_SSL
+        if Config.CA_BUNDLE and Config.VERIFY_SSL:
+            session.verify = Config.CA_BUNDLE
+            
         session.headers.update({"X-EMC-REST-CLIENT": "true", "Accept": "application/json", "Content-Type": "application/json"})
         try:
-            r = session.get(f"https://{ip}{endpoint}", auth=(user, password), timeout=15)
+            r = session.get(f"https://{host_port}{endpoint}", auth=(user, password), timeout=15)
             if r.status_code == 200:
                 body = r.json()
                 csrf = body.get("content", {}).get("EMCCSRFToken", "")
@@ -46,8 +59,14 @@ def _setup_session(ip, user, password):
                 return None, base, f"HTTP 401 — Identifiants refusés (user={user})"
             else:
                 return None, base, f"HTTP {r.status_code}"
+        except requests.exceptions.SSLError as e:
+            return None, base, f"Erreur SSL: {e}. Vérifiez VERIFY_SSL."
+        except requests.exceptions.ConnectTimeout:
+            return None, base, "Timeout de connexion (15s)"
+        except requests.exceptions.ConnectionError:
+            return None, base, "Erreur de connexion réseau"
         except Exception as e:
-            return None, base, str(e)
+            return None, base, f"Erreur inattendue: {str(e)}"
     return None, base, "Impossible d'établir une session"
 
 def _fetch_system_info(session, base, result):
@@ -132,9 +151,9 @@ def _fetch_performance(session, base, result):
             "latency_ms": round(p.get("currLatency", 0) / 1000, 2)
         }
 
-def collect(ip, name, user, password):
+def collect(ip, name, user, password, port=443, extra_params=None):
     result = _empty_result(name, ip)
-    session, base, err = _setup_session(ip, user, password)
+    session, base, err = _setup_session(ip, user, password, port)
     if not session:
         result["error"] = err
         result["overall_status"] = "Red"

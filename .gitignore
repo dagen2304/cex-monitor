@@ -8,3 +8,56 @@ vCenter.log
 
 instance/
 
+# ==========================================
+# Environnements virtuels (LE PLUS IMPORTANT)
+# ==========================================
+venv/
+.venv/
+env/
+.env/
+pip-wheel-metadata/
+
+# ==========================================
+# Fichiers de configuration locaux et secrets
+# ==========================================
+.env
+*.pem
+secrets/
+
+# ==========================================
+# Cache Python et fichiers compilés
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# ==========================================
+# Dossiers de build et de distribution
+# ==========================================
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ==========================================
+# Logs et bases de données locales
+# ==========================================
+*.log
+*.sqlite3
+*.db
+
+# ==========================================
+# IDE et Systèmes d'exploitation
+# ==========================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

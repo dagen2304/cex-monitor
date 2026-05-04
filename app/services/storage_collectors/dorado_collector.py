@@ -6,13 +6,13 @@ Port: 8088
 import requests
 import urllib3
 import os
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import json
+from app.config import Config
+
+if not Config.VERIFY_SSL:
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 HUAWEI_SEV = {"1": "CRITICAL", "2": "MAJOR", "3": "WARNING", "4": "INFO"}
-
-# scope=0 : compte local Dorado (ACTIF)
-# scope=1 : compte LDAP/Domaine (Active Directory)
-DORADO_AUTH_SCOPE = int(os.getenv("DORADO_SCOPE", "0"))  # Local par défaut
 
 def _empty_result(name, ip):
     return {
@@ -24,18 +24,31 @@ def _empty_result(name, ip):
         "volumes": {"total": 0}
     }
 
-def collect(ip, name, user, password):
+def collect(ip, name, user, password, port=8088, extra_params=None):
     result = _empty_result(name, ip)
     session = requests.Session()
-    session.verify = False
+    
+    # Gestion du scope via extra_params
+    auth_scope = 0
+    if extra_params:
+        try:
+            params = json.loads(extra_params)
+            auth_scope = int(params.get("scope", 0))
+        except:
+            pass
+
+    session.verify = Config.VERIFY_SSL
+    if Config.CA_BUNDLE and Config.VERIFY_SSL:
+        session.verify = Config.CA_BUNDLE
+
     session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
-    port = 8088
+    port = port or 8088
     base_login = f"https://{ip}:{port}/deviceManager/rest/xxxxx"
 
     try:
         # Step 1: Login (scope=1 = LDAP/Domaine)
         login_r = session.post(f"{base_login}/sessions",
-                               json={"username": user, "password": password, "scope": DORADO_AUTH_SCOPE},
+                               json={"username": user, "password": password, "scope": auth_scope},
                                timeout=15)
         if login_r.status_code != 200:
             result["error"] = f"Login HTTP {login_r.status_code}"

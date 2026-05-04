@@ -5,7 +5,10 @@ Optimisé pour le rôle Storage Operator (Accès aux métriques)
 import requests
 import urllib3
 import logging
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from app.config import Config
+
+if not Config.VERIFY_SSL:
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def _empty_result(name, ip):
     return {
@@ -17,17 +20,25 @@ def _empty_result(name, ip):
         "volumes": {"total": 0}
     }
 
-def collect(ip, name, user, password):
+def collect(ip, name, user, password, port=443, extra_params=None):
     result = _empty_result(name, ip)
     session = requests.Session()
     session.auth = (user, password)
-    session.verify = False
+    
+    session.verify = Config.VERIFY_SSL
+    if Config.CA_BUNDLE and Config.VERIFY_SSL:
+        session.verify = Config.CA_BUNDLE
+
     session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
-    base = f"https://{ip}/api/rest"
+    
+    # Éviter le port explicite si c'est 443 (certains équipements sont pointilleux)
+    if not port or port == 443:
+        base = f"https://{ip}/api/rest"
+    else:
+        base = f"https://{ip}:{port}/api/rest"
 
     try:
         # 1. Appliance ID & Info
-        # explicitly select fields to avoid getting only IDs
         r = session.get(f"{base}/appliance?select=*", timeout=60)
         if r.status_code != 200 or not r.json():
             result["error"] = f"Appliance query failed: {r.status_code}"
@@ -37,7 +48,6 @@ def collect(ip, name, user, password):
         appl = r.json()[0]
         app_id = appl.get("id")
         result["model"] = appl.get("model", "N/A")
-        # Try software_version first (PowerStore 3.x), then legacy major/minor
         result["firmware"] = appl.get("software_version", "N/A")
         if result["firmware"] == "N/A":
              result["firmware"] = f"{appl.get('software_version_major')}.{appl.get('software_version_minor')}"
@@ -45,6 +55,8 @@ def collect(ip, name, user, password):
 
         # 2. Capacity Metrics (Try multiple paths)
         cap_found = False
+        metrics_error = None
+        
         for path in ["/space_metrics", "/appliance_metrics"]:
             try:
                 r = session.get(f"{base}{path}?appliance_id=eq.{app_id}&order=timestamp.desc&limit=1", timeout=60)
@@ -62,23 +74,32 @@ def collect(ip, name, user, password):
                         cap_found = True
                         break
                 elif r.status_code == 403:
-                    result["error"] = "Metrics access denied (403)"
+                    metrics_error = "Metrics access denied (403)"
             except: continue
 
         # Fallback to Cluster capacity if metrics fail
         if not cap_found:
-            r = session.get(f"{base}/cluster?select=physical_total_bytes,physical_used_bytes", timeout=60)
-            if r.status_code == 200 and r.json():
-                cl = r.json()[0]
-                total = cl.get("physical_total_bytes", 0)
-                used = cl.get("physical_used_bytes", 0)
-                if total > 0:
-                    result["capacity"] = {
-                        "total_gb": round(total / (1024**3), 2),
-                        "used_gb": round(used / (1024**3), 2),
-                        "free_gb": round((total - used) / (1024**3), 2),
-                        "used_pct": round((used / total) * 100, 1)
-                    }
+            try:
+                r = session.get(f"{base}/cluster?select=*", timeout=60)
+                if r.status_code == 200 and r.json():
+                    cl = r.json()[0]
+                    total = cl.get("physical_total_bytes", 0)
+                    used = cl.get("physical_used_bytes", 0)
+                    if total > 0:
+                        result["capacity"] = {
+                            "total_gb": round(total / (1024**3), 2),
+                            "used_gb": round(used / (1024**3), 2),
+                            "free_gb": round((total - used) / (1024**3), 2),
+                            "used_pct": round((used / total) * 100, 1)
+                        }
+                        cap_found = True
+                else:
+                    if r.status_code == 403:
+                        metrics_error = "Cluster & Metrics access denied (403)"
+            except: pass
+
+        if not cap_found and metrics_error:
+            result["error"] = metrics_error
 
         # 3. Performance Metrics
         for path in ["/performance_metrics_by_appliance", "/metrics/appliance"]:

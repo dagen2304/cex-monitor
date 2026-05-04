@@ -4,7 +4,10 @@ Collecteur Dell EMC Data Domain — REST API
 import requests
 import urllib3
 import logging
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from app.config import Config
+
+if not Config.VERIFY_SSL:
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DD_PORT = 3009
 API_VERSIONS = ["v1.0", "v2.0", "v3.0"]
@@ -20,9 +23,10 @@ def _empty_result(name, ip):
         "volumes": {"total": 0}
     }
 
-def _login(session, ip, user, password):
+def _login(session, ip, user, password, port=3009):
+    port = port or 3009
     for ver in API_VERSIONS:
-        base = f"https://{ip}:{DD_PORT}/rest/{ver}"
+        base = f"https://{ip}:{port}/rest/{ver}"
         try:
             r = session.post(f"{base}/auth", json={"auth_info": {"username": user, "password": password}}, timeout=10)
             if r.status_code in [200, 201]:
@@ -45,14 +49,18 @@ def _login(session, ip, user, password):
             continue
     return None, "Auth failed"
 
-def collect(ip, name, user, password):
+def collect(ip, name, user, password, port=3009, extra_params=None):
     result = _empty_result(name, ip)
     session = requests.Session()
-    session.verify = False
+    
+    session.verify = Config.VERIFY_SSL
+    if Config.CA_BUNDLE and Config.VERIFY_SSL:
+        session.verify = Config.CA_BUNDLE
+
     session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
 
     try:
-        base, err = _login(session, ip, user, password)
+        base, err = _login(session, ip, user, password, port)
         if not base:
             result["error"] = err
             return result

@@ -3,6 +3,7 @@ import logging
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim
 import atexit
+from app.config import Config
 
 def collect_properties(si, vimtype, properties):
     """
@@ -233,7 +234,7 @@ def _get_alerts(si, vcenter_ip):
         logging.error(f"Erreur lors de la récupération des alarmes vCenter {vcenter_ip}: {e}")
     return alerts
 
-def fetch_vmware_stats(vcenter_ip, username, password):
+def fetch_vmware_stats(vcenter_ip, username, password, port=443, extra_params=None):
     """Se connecte au vCenter et retourne un dictionnaire formaté pour le Dashboard, ultra-rapide."""
     data = {
         "status": "success", "vcenter_ip": vcenter_ip, "clusters": [], "host_list": [],
@@ -242,8 +243,13 @@ def fetch_vmware_stats(vcenter_ip, username, password):
     }
 
     try:
-        context = ssl._create_unverified_context()
-        si = SmartConnect(host=vcenter_ip, user=username, pwd=password, sslContext=context)
+        if Config.VERIFY_SSL:
+            context = ssl.create_default_context(cafile=Config.CA_BUNDLE)
+        else:
+            context = ssl._create_unverified_context()
+            
+        port = port or 443
+        si = SmartConnect(host=vcenter_ip, user=username, pwd=password, port=port, sslContext=context)
         atexit.register(Disconnect, si)
 
         cluster_map, host_to_cluster = _get_clusters_data(si)
@@ -264,8 +270,17 @@ def fetch_vmware_stats(vcenter_ip, username, password):
         data["global_metrics"]["ram"] = round(((total_used_mem / 1024) / (total_mem_bytes / (1024**3)) * 100), 1) if total_mem_bytes > 0 else 0
         data["global_metrics"]["storage"] = round(((total_storage_cap - total_storage_free) / total_storage_cap * 100), 1) if total_storage_cap > 0 else 0
 
+    except (ssl.SSLError, ssl.CertificateError) as e:
+        data["status"] = "error"
+        data["error_msg"] = f"Erreur SSL/Certificat: {e}. Vérifiez VERIFY_SSL dans .env"
+    except (ConnectionRefusedError, TimeoutError, ConnectionError) as e:
+        data["status"] = "error"
+        data["error_msg"] = f"Erreur réseau (Timeout/Refused): {e}"
+    except vim.fault.InvalidLogin:
+        data["status"] = "error"
+        data["error_msg"] = "Identifiants vCenter incorrects"
     except Exception as e:
         data["status"] = "error"
-        data["error_msg"] = str(e)
+        data["error_msg"] = f"Erreur inattendue: {type(e).__name__}: {e}"
 
     return data

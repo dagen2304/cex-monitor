@@ -10,7 +10,8 @@ class Dashboard {
             storage: document.getElementById('view-storage'),
             capacity: document.getElementById('view-capacity'),
             alerts: document.getElementById('view-alerts'),
-            diagnostics: document.getElementById('view-diagnostics')
+            diagnostics: document.getElementById('view-diagnostics'),
+            inventory: document.getElementById('view-inventory')
         };
         
         this.navLinks = document.querySelectorAll('.nav-link');
@@ -79,6 +80,10 @@ class Dashboard {
         
         // Storage Search
         document.getElementById('search-storage').addEventListener('input', (e) => this.filterTable('storage-detailed-body', e.target.value));
+
+        // Inventory Search & Filters
+        document.getElementById('search-inventory').addEventListener('input', (e) => this.filterTable('inventory-body', e.target.value));
+        document.getElementById('filter-inventory-type').addEventListener('change', (e) => this.filterInventoryByType(e.target.value));
 
         // vCenter Filter
         const vcFilter = document.getElementById('filter-clusters-vc');
@@ -181,7 +186,8 @@ class Dashboard {
             storage: { title: 'Baies de Stockage', sub: 'Performance & Capacité SAN/NAS' },
             capacity: { title: 'Capacité & Tendances', sub: 'Analyse Week-to-Week et Month-on-Month' },
             alerts: { title: 'Alertes Globales', sub: 'Synthèse des incidents critiques' },
-            diagnostics: { title: 'Diagnostics API', sub: 'État du cache et du monitoring' }
+            diagnostics: { title: 'Diagnostics API', sub: 'État du cache et du monitoring' },
+            inventory: { title: 'Inventaire des Équipements', sub: 'Gestion centralisée (CRUD)' }
         };
         
         if (titles[viewName]) {
@@ -192,8 +198,115 @@ class Dashboard {
         if (viewName === 'diagnostics') this.fetchDiagnostics();
         if (viewName === 'alerts') this.renderGlobalAlerts();
         if (viewName === 'capacity') this.fetchCapacityReport();
+        if (viewName === 'inventory') this.loadInventory();
         
         this.currentView = viewName;
+    }
+
+    async loadInventory() {
+        const body = document.getElementById('inventory-body');
+        body.innerHTML = '<tr><td colspan="7" class="text-center">Chargement de l\'inventaire...</td></tr>';
+        
+        try {
+            const resp = await fetch('/api/config/devices');
+            const devices = await resp.json();
+            this.renderInventory(devices);
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Erreur: ${e.message}</td></tr>`;
+        }
+    }
+
+    renderInventory(devices) {
+        const body = document.getElementById('inventory-body');
+        body.innerHTML = '';
+        
+        if (devices.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="text-center">Aucun équipement configuré.</td></tr>';
+            document.getElementById('badge-inventory-count').textContent = '0';
+            return;
+        }
+
+        devices.forEach(d => {
+            const row = document.createElement('tr');
+            row.dataset.type = d.type;
+            row.innerHTML = `
+                <td><span class="vc-tag" style="background:rgba(255,255,255,0.1); color:#fff; text-transform:uppercase; font-size:0.7rem;">${d.type}</span></td>
+                <td><strong>${d.name}</strong></td>
+                <td class="font-mono">${d.ip}</td>
+                <td>${d.user || '--'}</td>
+                <td class="font-mono">${d.port || '--'}</td>
+                <td><span class="text-xs">${d.connection_mode || 'REST'}</span></td>
+                <td style="text-align: right;">
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="btn-icon-sm" onclick="dashboard.editDevice(${d.id})" title="Modifier">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                        <button class="btn-icon-sm danger" onclick="dashboard.deleteDevice(${d.id}, '${d.name}')" title="Supprimer">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
+                    </div>
+                </td>
+            `;
+            body.appendChild(row);
+        });
+        
+        document.getElementById('badge-inventory-count').textContent = devices.length;
+    }
+
+    async editDevice(id) {
+        try {
+            const resp = await fetch(`/api/config/devices/${id}`);
+            const d = await resp.json();
+            
+            // Re-use Add modal but change it for Update
+            document.getElementById('modal-add-device').classList.add('active');
+            document.querySelector('#modal-add-device h2').textContent = 'Modifier Équipement';
+            document.querySelector('#modal-add-device p').textContent = `ID: ${id} - Mise à jour des paramètres`;
+            document.getElementById('btn-submit-device').textContent = 'Enregistrer les modifications';
+            
+            // Fill fields
+            document.getElementById('add-device-type').value = d.type;
+            document.getElementById('add-device-name').value = d.name;
+            document.getElementById('add-device-ip').value = d.ip;
+            document.getElementById('add-device-port').value = d.port || '';
+            document.getElementById('add-device-mode').value = d.connection_mode || 'REST';
+            document.getElementById('add-device-extra').value = d.extra_params || '';
+            document.getElementById('add-device-user').value = d.user || '';
+            document.getElementById('add-device-pwd').value = ''; // Don't show password
+            
+            // Store ID in form for submit
+            document.getElementById('form-add-device').dataset.editId = id;
+        } catch (e) {
+            this.showNotification(`Erreur lors de la récupération: ${e.message}`, 'error');
+        }
+    }
+
+    async deleteDevice(id, name) {
+        if (!confirm(`Voulez-vous vraiment supprimer l'équipement "${name}" ?`)) return;
+        
+        try {
+            const resp = await fetch(`/api/config/devices/${id}`, { method: 'DELETE' });
+            const result = await resp.json();
+            if (result.success) {
+                this.showNotification(`Équipement ${name} supprimé.`, 'success');
+                this.loadInventory();
+            } else {
+                this.showNotification(`Erreur: ${result.error}`, 'error');
+            }
+        } catch (e) {
+            this.showNotification(`Erreur de connexion: ${e.message}`, 'error');
+        }
+    }
+
+    filterInventoryByType(type) {
+        const rows = document.querySelectorAll('#inventory-body tr');
+        rows.forEach(row => {
+            if (type === 'all' || row.dataset.type === type) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
     }
 
     async fetchCapacityReport() {
@@ -282,38 +395,57 @@ class Dashboard {
     startVMwareStream() {
         if (this.sse.vmware) this.sse.vmware.close();
         
+        console.log('Starting VMware stream...');
         this.sse.vmware = new EventSource('/api/vmware/stream');
         
         this.sse.vmware.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleVMwareUpdate(data);
+            try {
+                const data = JSON.parse(event.data);
+                this.handleVMwareUpdate(data);
+            } catch (e) {
+                console.error('Error parsing VMware SSE data:', e);
+            }
         };
 
         this.sse.vmware.addEventListener('end', () => {
-            console.log('VMware stream ended');
+            console.log('VMware stream ended gracefully');
             this.sse.vmware.close();
         });
 
-        this.sse.vmware.onerror = () => {
-            console.error('VMware stream error');
+        this.sse.vmware.onerror = (err) => {
+            console.error('VMware stream error:', err);
             this.sse.vmware.close();
+            this.showNotification('Flux VMware interrompu. Reconnexion dans 10s...', 'warning');
+            setTimeout(() => this.startVMwareStream(), 10000);
         };
     }
 
     startStorageStream() {
         if (this.sse.storage) this.sse.storage.close();
 
+        console.log('Starting Storage stream...');
         this.sse.storage = new EventSource('/api/storage/stream');
 
         this.sse.storage.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleStorageUpdate(data);
+            try {
+                const data = JSON.parse(event.data);
+                this.handleStorageUpdate(data);
+            } catch (e) {
+                console.error('Error parsing Storage SSE data:', e);
+            }
         };
 
         this.sse.storage.addEventListener('end', () => {
-            console.log('Storage stream ended');
+            console.log('Storage stream ended gracefully');
             this.sse.storage.close();
         });
+
+        this.sse.storage.onerror = (err) => {
+            console.error('Storage stream error:', err);
+            this.sse.storage.close();
+            this.showNotification('Flux Stockage interrompu. Reconnexion dans 10s...', 'warning');
+            setTimeout(() => this.startStorageStream(), 10000);
+        };
     }
 
     // --- DATA HANDLERS ---
@@ -961,47 +1093,68 @@ class Dashboard {
     }
 
     openAddDeviceModal() {
-        document.getElementById('modal-add-device').classList.add('active');
-        document.getElementById('add-device-name').value = '';
-        document.getElementById('add-device-ip').value = '';
+        const modal = document.getElementById('modal-add-device');
+        modal.classList.add('active');
+        
+        // Reset modal title and button for "Add" mode
+        document.querySelector('#modal-add-device h2').textContent = 'Nouvel Équipement';
+        document.querySelector('#modal-add-device p').textContent = 'Enregistrement sécurisé en base de données';
+        document.getElementById('btn-submit-device').textContent = 'Confirmer l\'ajout';
+        
+        // Reset form
+        document.getElementById('form-add-device').reset();
+        delete document.getElementById('form-add-device').dataset.editId;
     }
 
     async submitAddDevice() {
         const type = document.getElementById('add-device-type').value;
         const name = document.getElementById('add-device-name').value;
         const ip = document.getElementById('add-device-ip').value;
+        const port = document.getElementById('add-device-port').value;
+        const connection_mode = document.getElementById('add-device-mode').value;
+        const extra_params = document.getElementById('add-device-extra').value;
         const user = document.getElementById('add-device-user').value;
         const pwd = document.getElementById('add-device-pwd').value;
         const btn = document.getElementById('btn-submit-device');
+        const editId = document.getElementById('form-add-device').dataset.editId;
 
         if (!type || !name || !ip) return;
 
-        btn.textContent = 'Ajout en cours...';
+        btn.textContent = editId ? 'Mise à jour...' : 'Ajout en cours...';
         btn.disabled = true;
 
         try {
-            const resp = await fetch('/api/config/add_device', {
-                method: 'POST',
+            const url = editId ? `/api/config/devices/${editId}` : '/api/config/add_device';
+            const method = editId ? 'PUT' : 'POST';
+            
+            const resp = await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, name, ip, user, pwd })
+                body: JSON.stringify({ 
+                    type, name, ip, user, pwd, 
+                    port: port ? parseInt(port) : null, 
+                    connection_mode, extra_params 
+                })
             });
             const result = await resp.json();
 
             if (result.success) {
-                this.showNotification('Équipement ajouté avec succès ! Redémarrage des flux...', 'success');
+                this.showNotification(result.message || 'Succès !', 'success');
                 document.getElementById('modal-add-device').classList.remove('active');
                 
-                // Restart streams to pick up new device
-                setTimeout(() => {
-                    this.refreshData();
-                }, 1000);
+                if (this.currentView === 'inventory') {
+                    this.loadInventory();
+                } else {
+                    // If we added a device from another view, we might want to refresh data
+                    this.refreshAll();
+                }
             } else {
                 this.showNotification(`Erreur: ${result.error}`, 'error');
             }
         } catch (e) {
             this.showNotification(`Erreur de connexion: ${e.message}`, 'error');
         } finally {
-            btn.textContent = 'Ajouter';
+            btn.textContent = editId ? 'Enregistrer les modifications' : 'Confirmer l\'ajout';
             btn.disabled = false;
         }
     }
@@ -1237,6 +1390,113 @@ class Dashboard {
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 5000);
         }
+    }
+
+    // --- INVENTORY CRUD ---
+
+    async loadInventory() {
+        const body = document.getElementById('inventory-body');
+        if (!body) return;
+        body.innerHTML = '<tr><td colspan="7" class="text-center">Chargement de l\'inventaire...</td></tr>';
+        
+        try {
+            const resp = await fetch('/api/config/devices');
+            const devices = await resp.json();
+            this.renderInventory(devices);
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Erreur: ${e.message}</td></tr>`;
+        }
+    }
+
+    renderInventory(devices) {
+        const body = document.getElementById('inventory-body');
+        if (!body) return;
+        body.innerHTML = '';
+        
+        if (devices.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="text-center">Aucun équipement configuré.</td></tr>';
+            document.getElementById('badge-inventory-count').textContent = '0';
+            return;
+        }
+
+        devices.forEach(d => {
+            const row = document.createElement('tr');
+            row.dataset.type = d.type;
+            row.innerHTML = `
+                <td><span class="vc-tag" style="background:rgba(255,255,255,0.1); color:#fff; text-transform:uppercase; font-size:0.7rem;">${d.type}</span></td>
+                <td><strong>${d.name}</strong></td>
+                <td class="font-mono">${d.ip}</td>
+                <td>${d.user || '--'}</td>
+                <td class="font-mono">${d.port || '--'}</td>
+                <td><span class="text-xs">${d.connection_mode || 'REST'}</span></td>
+                <td style="text-align: right;">
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="btn-icon-sm" onclick="dashboard.editDevice(${d.id})" title="Modifier">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                        <button class="btn-icon-sm danger" onclick="dashboard.deleteDevice(${d.id}, '${d.name}')" title="Supprimer">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
+                    </div>
+                </td>
+            `;
+            body.appendChild(row);
+        });
+        
+        document.getElementById('badge-inventory-count').textContent = devices.length;
+    }
+
+    async editDevice(id) {
+        try {
+            const resp = await fetch(`/api/config/devices/${id}`);
+            const d = await resp.json();
+            
+            document.getElementById('modal-add-device').classList.add('active');
+            document.querySelector('#modal-add-device h2').textContent = 'Modifier Équipement';
+            document.querySelector('#modal-add-device p').textContent = `ID: ${id} - Mise à jour des paramètres`;
+            document.getElementById('btn-submit-device').textContent = 'Enregistrer les modifications';
+            
+            document.getElementById('add-device-type').value = d.type;
+            document.getElementById('add-device-name').value = d.name;
+            document.getElementById('add-device-ip').value = d.ip;
+            document.getElementById('add-device-port').value = d.port || '';
+            document.getElementById('add-device-mode').value = d.connection_mode || 'REST';
+            document.getElementById('add-device-extra').value = d.extra_params || '';
+            document.getElementById('add-device-user').value = d.user || '';
+            document.getElementById('add-device-pwd').value = '';
+            
+            document.getElementById('form-add-device').dataset.editId = id;
+        } catch (e) {
+            this.showNotification(`Erreur lors de la récupération: ${e.message}`, 'error');
+        }
+    }
+
+    async deleteDevice(id, name) {
+        if (!confirm(`Voulez-vous vraiment supprimer l'équipement "${name}" ?`)) return;
+        
+        try {
+            const resp = await fetch(`/api/config/devices/${id}`, { method: 'DELETE' });
+            const result = await resp.json();
+            if (result.success) {
+                this.showNotification(`Équipement ${name} supprimé.`, 'success');
+                this.loadInventory();
+            } else {
+                this.showNotification(`Erreur: ${result.error}`, 'error');
+            }
+        } catch (e) {
+            this.showNotification(`Erreur de connexion: ${e.message}`, 'error');
+        }
+    }
+
+    filterInventoryByType(type) {
+        const rows = document.querySelectorAll('#inventory-body tr');
+        rows.forEach(row => {
+            if (type === 'all' || row.dataset.type === type) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
     }
 }
 

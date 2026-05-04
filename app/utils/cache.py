@@ -8,16 +8,27 @@ class SimpleCache:
         self.lock = Lock()
         self.diagnostics = {}
 
+    def _purge_expired(self):
+        """Supprime les entrées expirées du cache."""
+        now = time.time()
+        keys_to_delete = [
+            k for k, (v, ts) in self.cache.items() 
+            if now - ts > self.ttl
+        ]
+        for k in keys_to_delete:
+            del self.cache[k]
+
     def get(self, key):
         with self.lock:
+            self._purge_expired()
             if key in self.cache:
                 val, timestamp = self.cache[key]
-                if time.time() - timestamp < self.ttl:
-                    return val
+                return val
             return None
 
     def set(self, key, value):
         with self.lock:
+            self._purge_expired()
             self.cache[key] = (value, time.time())
             # Update diagnostics
             if key not in self.diagnostics:

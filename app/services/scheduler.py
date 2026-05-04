@@ -16,7 +16,7 @@ def take_capacity_snapshot(app):
         for vc in vcenters:
             if not vc.get("ip"): continue
             try:
-                data = fetch_vmware_stats(vc["ip"], vc["user"], vc["pwd"])
+                data = fetch_vmware_stats(vc["ip"], vc["user"], vc["pwd"], vc.get("port"), vc.get("extra_params"))
                 if data.get("status") == "success":
                     metrics = [
                         ('cpu_usage', data['global_metrics']['cpu']),

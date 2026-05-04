@@ -9,12 +9,18 @@ from app.models import db
 from app.config import Config
 from app.services.scheduler import init_scheduler
 
-def create_app():
+def create_app(test_config=None):
     # Configuration du logging
     setup_logger()
     
     app = Flask(__name__)
+    
+    # Charger la config par défaut
     app.config.from_object(Config)
+    
+    # Surcharger avec la config de test si présente
+    if test_config:
+        app.config.update(test_config)
     
     # Initialisation DB
     db.init_app(app)
@@ -22,7 +28,8 @@ def create_app():
         db.create_all()
     
     # Initialisation Scheduler
-    init_scheduler(app)
+    if not app.config.get('TESTING'):
+        init_scheduler(app)
     
     # Registration des Blueprints
     app.register_blueprint(main_bp)

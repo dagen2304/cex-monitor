@@ -5,46 +5,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    SECRET_KEY = os.getenv('SECRET_KEY', 'you-will-never-guess')
     LOG_FILE = 'cex-monitor.log'
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
     LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+    
+    # SSL Security
+    VERIFY_SSL = os.getenv("VERIFY_SSL", "False").lower() == "true"
+    CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE", None)
     
     # Database
     SQLALCHEMY_DATABASE_URI = 'sqlite:///capacity.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     @staticmethod
-    def get_vcenter_user():
-        return os.getenv("VC_USER")
-
-    @staticmethod
-    def get_vcenter_password():
-        return os.getenv("VC_PASSWORD")
-
-    @staticmethod
     def get_configured_vcenters():
-        user = Config.get_vcenter_user()
-        pwd = Config.get_vcenter_password()
+        from app.models import Device
         vcenters = []
-        for i in range(1, 51):
-            ip = os.getenv(f"VC{i}_IP")
-            if ip:
-                vc_user = os.getenv(f"VC{i}_USER", user)
-                vc_pwd = os.getenv(f"VC{i}_PASSWORD", pwd)
+        
+        try:
+            db_devices = Device.query.filter_by(device_type='vcenter').all()
+            for dev in db_devices:
                 vcenters.append({
-                    "name": os.getenv(f"VC{i}_NAME", f"vCenter {i}"), 
-                    "ip": ip,
-                    "user": vc_user,
-                    "pwd": vc_pwd
+                    "name": dev.name,
+                    "ip": dev.ip,
+                    "user": dev.user,
+                    "pwd": dev.pwd,
+                    "port": dev.port,
+                    "connection_mode": dev.connection_mode,
+                    "extra_params": dev.extra_params
                 })
-        return vcenters
-
-    @staticmethod
-    def get_storage_credentials():
-        return {
-            "unity": (os.getenv("UNITY_USER", ""), os.getenv("UNITY_PASSWORD", "")),
-            "powerstore": (os.getenv("POWERSTORE_USER", ""), os.getenv("POWERSTORE_PASSWORD", "")),
-            "datadomain": (os.getenv("DD_USER", ""), os.getenv("DD_PASSWORD", "")),
-            "dorado": (os.getenv("DORADO_USER", ""), os.getenv("DORADO_PASSWORD", "")),
-            "scality": (os.getenv("SCALITY_USER", ""), os.getenv("SCALITY_PASSWORD", ""))
-        }
+        except Exception as e:
+            import logging
+            logging.error(f"Erreur chargement vCenters depuis DB: {e}")
+        
+        return sorted(vcenters, key=lambda x: x['name'])
