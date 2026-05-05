@@ -1,9 +1,19 @@
-from flask import Blueprint, jsonify
+import threading
+from flask import Blueprint, jsonify, current_app
 from sqlalchemy import func
 from datetime import datetime, timedelta
 from app.models import db, CapacitySnapshot
+from app.services.scheduler import take_capacity_snapshot
 
 capacity_bp = Blueprint('capacity', __name__)
+
+@capacity_bp.route('/api/capacity/capture', methods=['POST'])
+def trigger_capture():
+    """Déclenche une capture manuelle en arrière-plan."""
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=take_capacity_snapshot, args=(app,))
+    thread.start()
+    return jsonify({"success": True, "message": "Capture lancée en arrière-plan. Cela peut prendre quelques minutes."})
 
 @capacity_bp.route('/api/capacity/report')
 def get_capacity_report():

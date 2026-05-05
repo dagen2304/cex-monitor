@@ -417,6 +417,43 @@ class Dashboard {
         }
     }
 
+    async triggerManualCapture() {
+        const btn = document.getElementById('btn-trigger-capture');
+        if (!btn) return;
+
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `
+            <svg class="loading-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+            Capture...
+        `;
+
+        try {
+            const resp = await fetch('/api/capacity/capture', { method: 'POST' });
+            const result = await resp.json();
+            
+            if (result.success) {
+                this.showNotification(result.message, 'success');
+                // We don't refresh immediately because background task is running
+                // But we can suggest to the user to wait a bit
+                setTimeout(() => {
+                    this.fetchCapacityReport();
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    this.showNotification('Capture terminée. Données actualisées.', 'info');
+                }, 30000); // Wait 30s for a first refresh, though full may take longer
+            } else {
+                this.showNotification(`Erreur: ${result.error}`, 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        } catch (e) {
+            this.showNotification(`Erreur de connexion: ${e.message}`, 'error');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
     renderIndicatorRow(body, ind, data) {
         // Normalisation pour un matching plus robuste
         const normalize = (s) => s.toString().toUpperCase().replace(/\s+/g, ' ').trim();
