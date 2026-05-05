@@ -309,56 +309,148 @@ class Dashboard {
         });
     }
 
+    getWeekNumber(d) {
+        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return weekNo;
+    }
+
     async fetchCapacityReport() {
-        const body = document.getElementById('capacity-report-body');
-        body.innerHTML = '<tr><td colspan="6" class="text-center">Calcul des tendances...</td></tr>';
+        const body = document.getElementById('capacity-indicators-body');
+        if (!body) return;
         
+        body.innerHTML = `
+            <tr class="group-header" style="background: #fdf2f2; font-weight: 800; color: #000;">
+                <td colspan="3" style="padding: 8px 20px; color: #000; font-size: 1.1rem; border-bottom: 2px solid #000;">Utilisation réel PF VMWARE</td>
+            </tr>
+        `;
+
         try {
             const resp = await fetch('/api/capacity/report');
-            const data = await resp.json();
+            const dataObj = await resp.json();
+            const data = dataObj.report || [];
+
+            // Week Number
+            const now = new Date();
+            const weekNum = this.getWeekNumber(now);
+            const weekStr = "W" + (weekNum < 10 ? "0" + weekNum : weekNum);
             
-            if (data.length === 0) {
-                body.innerHTML = '<tr><td colspan="6" class="text-center">Aucun historique disponible pour le moment.</td></tr>';
-                return;
+            const weekCol = document.getElementById('header-week-col');
+            if (weekCol) weekCol.textContent = weekStr;
+            
+            const weekBadge = document.getElementById('capacity-current-week');
+            if (weekBadge) weekBadge.textContent = weekStr;
+
+            if (dataObj.timestamp) {
+                const lastRun = document.getElementById('capacity-last-run');
+                if (lastRun) lastRun.textContent = new Date(dataObj.timestamp).toLocaleDateString();
             }
 
-            body.innerHTML = '';
-            let totalW2W = 0, countW2W = 0;
-            let totalMoM = 0, countMoM = 0;
+            // Definitions mapping (Label, Target, Search Keyword, Metric)
+            const vmwareIndicators = [
+                { label: '% of CPU (All platform) - vCenter IN/ZSMART', target: '<=50%', device: 'vCenter IN/ZSMART', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter IN/ZSMART', target: '< 50%', device: 'vCenter IN/ZSMART', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter ODC', target: '<=50%', device: 'vCenter ODC', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter ODC', target: '< 50%', device: 'vCenter ODC', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter-67-Agence', target: '<=50%', device: 'vCenter-67-Agence', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter-67-Agence', target: '< 50%', device: 'vCenter-67-Agence', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter67-MKP', target: '<=50%', device: 'vCenter67-MKP', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter67-MKP', target: '< 50%', device: 'vCenter67-MKP', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter67-NDG', target: '<=50%', device: 'vCenter67-NDG', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter67-NDG', target: '< 50%', device: 'vCenter67-NDG', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter67-SVI', target: '<=50%', device: 'vCenter67-SVI', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter67-SVI', target: '< 50%', device: 'vCenter67-SVI', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter80-MKP', target: '<=50%', device: 'vCenter80-MKP', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter80-MKP', target: '< 50%', device: 'vCenter80-MKP', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenter80-NDG', target: '<=50%', device: 'vCenter80-NDG', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenter80-NDG', target: '< 50%', device: 'vCenter80-NDG', metric: 'ram_usage' },
+                { label: '% of CPU (All platform) - vCenterLab', target: '<=50%', device: 'vCenterLab', metric: 'cpu_usage' },
+                { label: '% of memory used (RAM) (All platform) - vCenterLab', target: '< 50%', device: 'vCenterLab', metric: 'ram_usage' }
+            ];
 
-            data.forEach(item => {
-                const row = document.createElement('tr');
-                const w2wClass = item.w2w_delta > 0 ? 'text-danger' : (item.w2w_delta < 0 ? 'text-success' : '');
-                const momClass = item.mom_delta > 0 ? 'text-danger' : (item.mom_delta < 0 ? 'text-success' : '');
-                
-                const w2wVal = item.w2w_delta !== null ? (item.w2w_delta > 0 ? '+' : '') + item.w2w_delta + '%' : '--';
-                const momVal = item.mom_delta !== null ? (item.mom_delta > 0 ? '+' : '') + item.mom_delta + '%' : '--';
-                
-                if (item.w2w_delta !== null) { totalW2W += item.w2w_delta; countW2W++; }
-                if (item.mom_delta !== null) { totalMoM += item.mom_delta; countMoM++; }
+            const storageIndicators = [
+                { label: '% Capacity usage - PowerStore-IN', target: '<=80%', device: 'PowerStore-IN', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - PowerStore-MKP', target: '<=80%', device: 'PowerStore-MKP', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - DataDomain-4200-MKP', target: '<=80%', device: 'DataDomain-4200-MKP', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Scality-Ring', target: '<=80%', device: 'Scality-Ring', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - DataDomain-9400-MKP', target: '<=80%', device: 'DataDomain-9400-MKP', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - DataDomain-9400-NDG', target: '<=80%', device: 'DataDomain-9400-NDG', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Dorado-NDG', target: '<=80%', device: 'Dorado-NDG', metric: 'storage_used_pct' },
+                { label: '% Subscription', target: '<=600%', device: 'Dorado-NDG', metric: 'subscription_pct' },
+                { label: '% Capacity usage - Dorado-MKP', target: '<=80%', device: 'Dorado-MKP', metric: 'storage_used_pct' },
+                { label: '% Subscription', target: '<=600%', device: 'Dorado-MKP', metric: 'subscription_pct' },
+                { label: '% Capacity usage - Unity-400-OCS-DR', target: '<=80%', device: 'Unity-400-OCS-DR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-400-OCS-PR', target: '<=80%', device: 'Unity-400-OCS-PR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-480F-DR', target: '<=80%', device: 'Unity-480F-DR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-480F-PR', target: '<=80%', device: 'Unity-480F-PR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-350-IN-PR', target: '<=80%', device: 'Unity-350-IN-PR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-350-IN-DR', target: '<=80%', device: 'Unity-350-IN-DR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-350-NETACT-PR', target: '<=80%', device: 'Unity-350-NETACT-PR', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - Unity-300-NETACT-BKP', target: '<=80%', device: 'Unity-300-NETACT-BKP', metric: 'storage_used_pct' },
+                { label: '% Capacity usage - PowerStore-NDG', target: '<=80%', device: 'PowerStore-NDG', metric: 'storage_used_pct' }
+            ];
 
-                row.innerHTML = `
-                    <td><strong>${item.device_name}</strong> <span class="text-xs text-muted">(${item.device_type})</span></td>
-                    <td><code class="text-xs">${item.metric}</code></td>
-                    <td class="text-center font-mono">${item.current}%</td>
-                    <td class="text-center font-mono ${w2wClass}">${w2wVal}</td>
-                    <td class="text-center font-mono ${momClass}">${momVal}</td>
-                    <td>
-                        ${item.w2w_delta > 2 ? '<span class="badge danger">SATURE</span>' : 
-                          (item.w2w_delta > 0 ? '<span class="badge warning">AUGMENTE</span>' : '<span class="badge success">STABLE</span>')}
-                    </td>
-                `;
-                body.appendChild(row);
-            });
+            // Render VMware
+            vmwareIndicators.forEach(ind => this.renderIndicatorRow(body, ind, data));
 
-            // Update Summaries
-            document.getElementById('capacity-summary-w2w').textContent = countW2W > 0 ? (Math.round(totalW2W/countW2W*10)/10) + '%' : '--';
-            document.getElementById('capacity-summary-mom').textContent = countMoM > 0 ? (Math.round(totalMoM/countMoM*10)/10) + '%' : '--';
-            document.getElementById('capacity-last-run').textContent = new Date().toLocaleTimeString();
+            // Render Storage Header
+            const storageHeader = document.createElement('tr');
+            storageHeader.innerHTML = '<td colspan="3" style="padding: 8px 20px; color: #000; font-size: 1.1rem; border-bottom: 2px solid #000; background: #fdf2f2; font-weight: 800;">Utilisation Stockage / Baies</td>';
+            body.appendChild(storageHeader);
+
+            // Render Storage
+            storageIndicators.forEach(ind => this.renderIndicatorRow(body, ind, data));
+
+            // Global Status
+            const criticals = body.querySelectorAll('.val-red').length;
+            const globalStatus = document.getElementById('capacity-global-status');
+            if (globalStatus) {
+                globalStatus.textContent = criticals > 0 ? `${criticals} Alertes` : 'Optimal';
+                globalStatus.className = criticals > 0 ? 'red' : 'green';
+            }
 
         } catch (e) {
-            body.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Erreur: ${e.message}</td></tr>`;
+            console.error('Error fetching capacity report:', e);
+            body.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Erreur: ${e.message}</td></tr>`;
         }
+    }
+
+    renderIndicatorRow(body, ind, data) {
+        // Normalisation pour un matching plus robuste
+        const normalize = (s) => s.toString().toUpperCase().replace(/\s+/g, ' ').trim();
+        const keyword = normalize(ind.device);
+        const exclude = ind.exclude ? normalize(ind.exclude) : null;
+
+        const point = data.find(d => {
+            const name = normalize(d.device_name);
+            const matchesKeyword = name.includes(keyword);
+            const isNotExcluded = exclude ? !name.includes(exclude) : true;
+            return matchesKeyword && isNotExcluded && d.metric === ind.metric;
+        });
+
+        if (!point) {
+            console.warn(`No match found for indicator: ${ind.label} (Keyword: ${keyword}, Metric: ${ind.metric})`);
+        }
+
+        const row = document.createElement('tr');
+        const val = point ? point.current : null;
+        const valStr = val !== null ? val.toFixed(2).replace('.', ',') + '%' : '--';
+        
+        let isCritical = false;
+        if (val !== null) {
+            const targetVal = parseFloat(ind.target.replace(/[^\d.]/g, ''));
+            if (ind.target.includes('<=') && val > targetVal) isCritical = true;
+            else if (ind.target.includes('<') && val >= targetVal) isCritical = true;
+        }
+
+        row.innerHTML = `
+            <td style="color: #000; padding-left: 30px; border: 1px solid #ddd;">${ind.label}</td>
+            <td class="target-cell" style="border: 1px solid #ddd; text-align: center; background: #f8f9fa;">${ind.target}</td>
+            <td class="val-cell ${isCritical ? 'val-red' : 'val-green'}" style="border: 1px solid #ddd; text-align: center; font-weight: 600;">${valStr}</td>
+        `;
+        body.appendChild(row);
     }
 
     startClock() {
@@ -1276,10 +1368,14 @@ class Dashboard {
             const element = type === 'vcenters' ? document.getElementById('vcenters-grid') : 
                            (type === 'clusters-detailed' ? document.getElementById('container-clusters-detailed') : 
                            (type === 'storage-detailed' ? document.getElementById('table-storage-detailed').parentElement :
-                           document.getElementById('view-vmware')));
+                           (type === 'capacity' ? document.getElementById('view-capacity') :
+                           document.getElementById('view-vmware'))));
             
             this.showNotification('Génération de la capture...');
-            const canvas = await html2canvas(element, { backgroundColor: '#050508' });
+            const canvas = await html2canvas(element, { 
+                backgroundColor: '#050508',
+                scale: 2 // Higher quality
+            });
             const link = document.createElement('a');
             link.download = `${filename}.png`;
             link.href = canvas.toDataURL();
@@ -1288,7 +1384,24 @@ class Dashboard {
         }
 
         let dataToExport = [];
-        if (type === 'vcenters') {
+        if (type === 'capacity') {
+            const table = document.getElementById('table-capacity-indicators');
+            const head = table.querySelector('thead');
+            const body = table.querySelector('tbody');
+            
+            // Header
+            dataToExport.push(Array.from(head.querySelectorAll('th')).map(th => th.innerText));
+            
+            // Body
+            body.querySelectorAll('tr').forEach(tr => {
+                if (tr.classList.contains('group-header')) {
+                    // Group headers have one cell with colspan
+                    dataToExport.push([tr.innerText, '', '']);
+                } else {
+                    dataToExport.push(Array.from(tr.querySelectorAll('td')).map(td => td.innerText));
+                }
+            });
+        } else if (type === 'vcenters') {
             // ... (keep existing)
         } else if (type === 'clusters-detailed' || type === 'storage-detailed') {
             const table = document.getElementById(type === 'clusters-detailed' ? 'table-clusters-detailed' : 'table-storage-detailed');
