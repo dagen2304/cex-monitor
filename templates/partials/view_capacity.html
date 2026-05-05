@@ -1,53 +1,97 @@
 <!-- Capacity View -->
 <div id="view-capacity" class="view-pane">
-    <div class="alerts-summary-grid">
-        <div class="alert-summary-card blue">
-            <span class="lbl">Tendance W2W</span>
-            <h3 id="capacity-summary-w2w">--</h3>
+    <div class="view-header" style="margin-bottom: 25px;">
+        <div class="header-main">
+            <h2 class="view-title">Capacité & Tendances</h2>
+            <p class="view-subtitle">Analyse Week-to-Week et Month-on-Month</p>
         </div>
-        <div class="alert-summary-card accent">
-            <span class="lbl">Tendance MoM</span>
-            <h3 id="capacity-summary-mom">--</h3>
-        </div>
-        <div class="alert-summary-card">
-            <span class="lbl">Dernière Capture</span>
-            <h3 id="capacity-last-run" style="font-size: 1.2rem;">Attente...</h3>
+        <div class="header-actions">
+            <div class="export-group" style="display: flex; gap: 10px;">
+                <button class="btn-export" onclick="dashboard.exportData('capacity', 'xls')" title="Exporter en Excel">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    XLS
+                </button>
+                <button class="btn-export" onclick="dashboard.exportData('capacity', 'csv')" title="Exporter en CSV">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                    CSV
+                </button>
+                <button class="btn-export" onclick="dashboard.exportData('capacity', 'png')" title="Capturer en image">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    PNG
+                </button>
+            </div>
         </div>
     </div>
 
-    <section class="data-panel" style="margin-top: 24px;">
-        <div class="panel-header">
-            <div class="header-left">
-                <h3>Rapport de Saturation Capacitaire</h3>
-                <span class="badge">Week-to-Week & Month-on-Month</span>
-            </div>
-            <div class="header-actions">
-                <button class="btn-export" onclick="dashboard.fetchCapacityReport()">Rafraîchir Rapport</button>
-            </div>
+    <div class="alerts-summary-grid" style="margin-bottom: 30px;">
+        <div class="alert-summary-card blue">
+            <span class="lbl">Capture de Référence</span>
+            <h3 id="capacity-last-run">--</h3>
         </div>
-        <div class="table-container">
-            <table class="premium-table" id="table-capacity-report">
+        <div class="alert-summary-card" style="border-left: 4px solid var(--primary);">
+            <span class="lbl">Semaine Actuelle</span>
+            <h3 id="capacity-current-week">W--</h3>
+        </div>
+        <div class="alert-summary-card accent">
+            <span class="lbl">État Global</span>
+            <h3 id="capacity-global-status">--</h3>
+        </div>
+    </div>
+
+    <section class="data-panel" style="border: none; background: transparent; box-shadow: none; overflow: visible;">
+        <div class="table-container" style="max-height: none; overflow: visible;">
+            <table class="premium-table capacity-table" id="table-capacity-indicators">
                 <thead>
-                    <tr>
-                        <th>Équipement</th>
-                        <th>Métrique</th>
-                        <th class="text-center">Usage Actuel</th>
-                        <th class="text-center">Delta W2W</th>
-                        <th class="text-center">Delta MoM</th>
-                        <th>Status Tendance</th>
+                    <tr style="background: #e67e22; color: #fff;">
+                        <th style="padding: 12px 20px; text-transform: none; letter-spacing: normal; font-size: 1rem; color: #fff; width: 60%;">Indicateurs</th>
+                        <th style="padding: 12px 20px; text-transform: none; letter-spacing: normal; font-size: 1rem; color: #fff; text-align: center; width: 20%;">Cible</th>
+                        <th style="padding: 12px 20px; text-transform: none; letter-spacing: normal; font-size: 1rem; color: #fff; text-align: center; width: 20%;" id="header-week-col">W--</th>
                     </tr>
                 </thead>
-                <tbody id="capacity-report-body">
-                    <tr><td colspan="6" class="text-center">Initialisation du rapport...</td></tr>
+                <tbody id="capacity-indicators-body">
+                    <tr class="group-header" style="background: #fdf2f2; font-weight: 800; color: #000;">
+                        <td colspan="3" style="padding: 8px 20px; color: #000; font-size: 1.1rem; border-bottom: 2px solid #000;">Utilisation réel PF VMWARE</td>
+                    </tr>
+                    <!-- Les lignes seront injectées dynamiquement par JS -->
                 </tbody>
             </table>
         </div>
     </section>
-    
-    <div class="info-note" style="margin-top:20px; padding:16px; background:rgba(255,255,255,0.05); border-radius:12px; font-size:0.85rem; color:var(--text-muted);">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:8px;">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-        </svg>
-        Note: Les deltas sont calculés par rapport à la capture de référence la plus proche des 7 et 30 derniers jours. Une capture automatique est effectuée chaque jour à minuit.
-    </div>
 </div>
+
+<style>
+    .capacity-table {
+        background: #fff;
+        border-collapse: collapse;
+        width: 100%;
+        color: #333;
+        border: 1px solid #ddd;
+    }
+    .capacity-table td {
+        border: 1px solid #ddd;
+        padding: 8px 20px;
+        font-size: 0.95rem;
+        background: #fff !important;
+        color: #000;
+    }
+    .capacity-table th {
+        border: 1px solid #d35400;
+        background: #e67e22 !important;
+        position: relative;
+    }
+    .capacity-table tr:hover td {
+        background: #f9f9f9 !important;
+    }
+    .val-cell {
+        text-align: center;
+        font-weight: 600;
+        font-family: var(--font-mono);
+    }
+    .target-cell {
+        text-align: center;
+        background: #f8f9fa !important;
+        color: #666;
+    }
+    .val-green { color: #27ae60 !important; }
+    .val-red { color: #e74c3c !important; }
+</style>
